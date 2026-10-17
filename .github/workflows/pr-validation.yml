@@ -1,0 +1,68 @@
+name: Validate Pull Request
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened]
+
+permissions:
+  pull-requests: read
+  contents: read
+
+jobs:
+  validate-pr:
+    name: Validate PR Title & Format
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate PR Title Convention
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const title = context.payload.pull_request.title.trim();
+            // Expected format: [KAN-xxx] type: concise description
+            const titleRegex = /^\[(KAN-\d+)\]\s+(feat|fix|test|docs|refactor|chore|perf|ci)(\([a-zA-Z0-9_\-]+\))?:\s+.+$/;
+            
+            if (!titleRegex.test(title)) {
+              core.setFailed(
+                `PR Title "${title}" does not match required format: [KAN-xxx] type: concise description\n` +
+                `Example: [KAN-185] feat: implement pos offline transaction storage`
+              );
+            } else {
+              core.info(`PR Title is valid: ${title}`);
+            }
+
+      - name: Validate PR Description Structure
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const body = context.payload.pull_request.body || "";
+            
+            // 1. Check for literal escape sequences like \n or \n\n
+            if (/\\n/.test(body)) {
+              core.setFailed("PR body contains literal '\\n' escape sequences. Use real newline characters.");
+            }
+            
+            // 2. Check for required headings
+            const requiredSections = [
+              "### Summary",
+              "### Changes",
+              "### Testing",
+              "### Jira"
+            ];
+            
+            const missingSections = requiredSections.filter(sec => !body.includes(sec));
+            if (missingSections.length > 0) {
+              core.setFailed(`PR description is missing required sections: ${missingSections.join(", ")}`);
+            }
+            
+            // 3. Check for Jira Key in body
+            const jiraRegex = /KAN-\d+/;
+            if (!jiraRegex.test(body)) {
+              core.setFailed("PR description must reference a valid Jira issue key (e.g. KAN-123).");
+            }
+            
+            // 4. Check for unresolved placeholders
+            if (body.includes("KAN-XXX")) {
+              core.setFailed("PR description contains placeholder 'KAN-XXX'. Please replace it with the actual Jira issue key.");
+            }
+            
+            core.info("PR description structure passed all validation checks.");
