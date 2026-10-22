@@ -28,15 +28,26 @@ fun OpenShiftDialog(
     
     // Quick lump sum entry option vs denomination breakdown
     var useLumpSum by remember { mutableStateOf(false) }
-    var lumpSumText by remember { mutableStateOf("200.00") }
+    var lumpSumText by remember { mutableStateOf("") }
 
     val calculatedTotal = remember {
         derivedStateOf {
             if (useLumpSum) {
-                lumpSumText.toDoubleOrNull() ?: 0.0
+                val parsed = lumpSumText.toDoubleOrNull() ?: 0.0
+                kotlin.math.round(parsed * 100.0) / 100.0
             } else {
                 val list = countMap.map { CashDenomination(it.key, it.value) }
                 CashCalculationUtils.calculateTotal(list)
+            }
+        }
+    }
+
+    val isInputValid = remember {
+        derivedStateOf {
+            if (useLumpSum) {
+                lumpSumText.toDoubleOrNull() != null && CashCalculationUtils.isValidStartingFloat(calculatedTotal.value)
+            } else {
+                CashCalculationUtils.isValidStartingFloat(calculatedTotal.value)
             }
         }
     }
@@ -76,7 +87,11 @@ fun OpenShiftDialog(
                         onValueChange = { lumpSumText = it },
                         label = { Text("Starting Cash Float ($)") },
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                        modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp)
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp),
+                        isError = useLumpSum && !isInputValid.value && lumpSumText.isNotEmpty(),
+                        supportingText = if (useLumpSum && !isInputValid.value && lumpSumText.isNotEmpty()) {
+                            { Text("Please enter a valid starting float ($0 - $5,000)") }
+                        } else null
                     )
                 } else {
                     LazyColumn(
@@ -141,7 +156,7 @@ fun OpenShiftDialog(
                     }
                     onConfirm(calculatedTotal.value, denominations)
                 },
-                enabled = calculatedTotal.value >= 0.0
+                enabled = isInputValid.value
             ) {
                 Text("Open Shift")
             }

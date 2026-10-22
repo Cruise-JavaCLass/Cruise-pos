@@ -22,7 +22,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import kotlinx.coroutines.launch
 
 @Composable
 fun PinKeypadSection(
@@ -33,18 +32,15 @@ fun PinKeypadSection(
     onBackspaceClick: () -> Unit,
     onClearClick: () -> Unit
 ) {
-    val coroutineScope = rememberCoroutineScope()
     val shakeOffset = remember { Animatable(0f) }
 
     LaunchedEffect(errorMessage) {
         if (!errorMessage.isNullOrBlank()) {
-            coroutineScope.launch {
-                repeat(3) {
-                    shakeOffset.animateTo(20f, tween(50))
-                    shakeOffset.animateTo(-20f, tween(50))
-                }
-                shakeOffset.animateTo(0f, tween(50))
+            repeat(3) {
+                shakeOffset.animateTo(20f, tween(50))
+                shakeOffset.animateTo(-20f, tween(50))
             }
+            shakeOffset.animateTo(0f, tween(50))
         }
     }
 

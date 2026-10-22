@@ -20,15 +20,18 @@ fun ActiveShiftStateBanner(
     onCloseShiftClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val openShift = currentShift?.takeIf { it.status == ShiftStatus.OPEN }
+    val isSuspended = currentShift?.status == ShiftStatus.SUSPENDED
+
     Card(
         modifier = modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 8.dp),
         colors = CardDefaults.cardColors(
-            containerColor = if (currentShift?.status == ShiftStatus.OPEN) {
-                MaterialTheme.colorScheme.primaryContainer
-            } else {
-                MaterialTheme.colorScheme.errorContainer
+            containerColor = when {
+                openShift != null -> MaterialTheme.colorScheme.primaryContainer
+                isSuspended -> MaterialTheme.colorScheme.tertiaryContainer
+                else -> MaterialTheme.colorScheme.errorContainer
             }
         ),
         shape = RoundedCornerShape(12.dp),
@@ -47,34 +50,48 @@ fun ActiveShiftStateBanner(
                         modifier = Modifier
                             .size(10.dp)
                             .background(
-                                color = if (currentShift?.status == ShiftStatus.OPEN) Color(0xFF2E7D32) else Color(0xFFC62828),
+                                color = when {
+                                    openShift != null -> Color(0xFF2E7D32)
+                                    isSuspended -> Color(0xFFE65100)
+                                    else -> Color(0xFFC62828)
+                                },
                                 shape = RoundedCornerShape(50)
                             )
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
-                        text = if (currentShift?.status == ShiftStatus.OPEN) "ACTIVE SHIFT" else "NO ACTIVE SHIFT",
+                        text = when {
+                            openShift != null -> "ACTIVE SHIFT"
+                            isSuspended -> "SHIFT SUSPENDED"
+                            else -> "NO ACTIVE SHIFT"
+                        },
                         style = MaterialTheme.typography.labelLarge,
                         fontWeight = FontWeight.Bold,
-                        color = if (currentShift?.status == ShiftStatus.OPEN) {
-                            MaterialTheme.colorScheme.onPrimaryContainer
-                        } else {
-                            MaterialTheme.colorScheme.onErrorContainer
+                        color = when {
+                            openShift != null -> MaterialTheme.colorScheme.onPrimaryContainer
+                            isSuspended -> MaterialTheme.colorScheme.onTertiaryContainer
+                            else -> MaterialTheme.colorScheme.onErrorContainer
                         }
                     )
                 }
 
                 Spacer(modifier = Modifier.height(4.dp))
 
-                if (currentShift?.status == ShiftStatus.OPEN) {
+                if (openShift != null) {
                     Text(
-                        text = "Cashier: ${currentShift.cashierName} • Station: ${currentShift.stationId}",
+                        text = "Cashier: ${openShift.cashierName} • Station: ${openShift.stationId}",
                         style = MaterialTheme.typography.bodyMedium
                     )
                     Text(
-                        text = "Float: $${"%.2f".format(currentShift.startingFloat)} • Opened at ${currentShift.openedAt}",
+                        text = "Float: $${"%.2f".format(openShift.startingFloat)} • Opened at ${openShift.openedAt}",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                } else if (isSuspended) {
+                    Text(
+                        text = "Shift is suspended for station audit or cashier break. Resume before processing.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onTertiaryContainer
                     )
                 } else {
                     Text(
@@ -87,14 +104,14 @@ fun ActiveShiftStateBanner(
 
             Spacer(modifier = Modifier.width(16.dp))
 
-            if (currentShift?.status == ShiftStatus.OPEN) {
+            if (openShift != null) {
                 Button(
                     onClick = onCloseShiftClick,
                     colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
                 ) {
                     Text("Close Shift")
                 }
-            } else {
+            } else if (!isSuspended) {
                 Button(
                     onClick = onOpenShiftClick,
                     colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)

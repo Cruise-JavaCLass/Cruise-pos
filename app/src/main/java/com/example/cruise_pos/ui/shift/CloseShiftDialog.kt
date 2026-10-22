@@ -48,6 +48,14 @@ fun CloseShiftDialog(
         }
     }
 
+    val isCountValid = if (useLumpSum) {
+        lumpSumText.toDoubleOrNull() != null
+    } else {
+        countMap.values.any { it > 0 }
+    }
+
+    val isConfirmEnabled = isCountValid && (discrepancy.value == 0.0 || closingNote.trim().isNotEmpty())
+
     AlertDialog(
         onDismissRequest = onDismiss,
         title = {
@@ -187,8 +195,9 @@ fun CloseShiftDialog(
                     } else {
                         countMap.filter { it.value > 0 }.map { CashDenomination(it.key, it.value) }
                     }
-                    onConfirmClose(actualTotal.value, denominations, closingNote)
+                    onConfirmClose(actualTotal.value, denominations, closingNote.trim())
                 },
+                enabled = isConfirmEnabled,
                 colors = ButtonDefaults.buttonColors(
                     containerColor = if (discrepancy.value != 0.0) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
                 )
