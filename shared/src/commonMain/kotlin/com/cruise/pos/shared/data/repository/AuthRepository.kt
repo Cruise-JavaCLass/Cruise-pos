@@ -54,5 +54,6 @@ class AuthRepositoryImpl(
         sessionManager?.clearSession()
     }
 
-    override fun getSavedStation(): String? = tokenStorage.getCurrentStation()
+    override fun getSavedStation(): String? =
+        sessionManager?.getAssignedStationId() ?: tokenStorage.getCurrentStation()
 }
