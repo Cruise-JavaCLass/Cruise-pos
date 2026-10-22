@@ -1,0 +1,61 @@
+name: Jules Solve Issue
+
+on:
+  issues:
+    types:
+      - labeled
+  issue_comment:
+    types:
+      - created
+  workflow_dispatch:
+    inputs:
+      issue_number:
+        description: 'GitHub Issue Number to solve'
+        required: true
+        type: string
+
+concurrency:
+  group: jules-solve-issue-${{ github.event.issue.number || inputs.issue_number }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  issues: read
+
+jobs:
+  solve-issue:
+    name: Solve Issue with Google Jules
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    # Trigger when:
+    # 1. Manual trigger with inputs.issue_number
+    # 2. An issue is labeled with 'jules' or 'ai-fix'
+    # 3. An issue comment (not PR) mentions '@jules'
+    if: >
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'issues' && (github.event.label.name == 'jules' || github.event.label.name == 'ai-fix')) ||
+      (github.event_name == 'issue_comment' && !github.event.issue.pull_request && contains(github.event.comment.body, '@jules'))
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+
+      - name: Fetch Issue Data and Launch Jules
+        env:
+          JULES_API_KEY: ${{ secrets.JULES_API_KEY }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          ISSUE_NUMBER: ${{ github.event.issue.number || inputs.issue_number }}
+          ISSUE_TITLE: ${{ github.event.issue.title || '' }}
+          ISSUE_BODY: ${{ github.event.issue.body || '' }}
+          ISSUE_URL: ${{ github.event.issue.html_url || '' }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch || 'main' }}
+        run: node .github/scripts/run-solve-issue.mjs

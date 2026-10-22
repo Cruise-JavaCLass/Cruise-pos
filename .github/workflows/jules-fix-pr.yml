@@ -1,0 +1,84 @@
+name: Jules PR Auto-Fixer
+
+on:
+  issue_comment:
+    types:
+      - created
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: 'Pull Request number'
+        required: true
+        type: string
+      pr_branch:
+        description: 'Branch of the Pull Request'
+        required: true
+        type: string
+      failure_type:
+        description: 'Reason / Type (e.g. sonarcloud, coderabbit, ci-test)'
+        required: false
+        default: 'manual-trigger'
+
+concurrency:
+  group: jules-fix-pr-${{ github.event.issue.number || inputs.pr_number }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  pull-requests: read
+  actions: read
+
+jobs:
+  fix-pr:
+    name: Auto-Fix PR with Google Jules
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    # Process only if:
+    # 1. Manual trigger via workflow_dispatch
+    # 2. Or issue_comment on a PR explicitly mentioning '@jules fix' from a trusted collaborator
+    if: >
+      github.event_name == 'workflow_dispatch' ||
+      (
+        github.event_name == 'issue_comment' &&
+        github.event.issue.pull_request &&
+        contains(github.event.comment.body, '@jules fix') &&
+        contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association)
+      )
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+
+      - name: Resolve PR head branch
+        if: github.event_name == 'issue_comment'
+        id: pr
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          REF=$(gh api "repos/${{ github.repository }}/pulls/${{ github.event.issue.number }}" \
+            --jq 'select(.head.repo.full_name == "${{ github.repository }}") | .head.ref')
+          if [ -z "$REF" ]; then
+            echo "PR branch not found or PR is from an external fork. Exiting."
+            exit 1
+          fi
+          echo "branch=$REF" >> "$GITHUB_OUTPUT"
+
+      - name: Resolve PR Information and Trigger Jules
+        env:
+          JULES_API_KEY: ${{ secrets.JULES_API_KEY }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          PR_NUMBER: ${{ inputs.pr_number || github.event.issue.number }}
+          PR_BRANCH: ${{ inputs.pr_branch || steps.pr.outputs.branch }}
+          FAILURE_TYPE: ${{ inputs.failure_type || (github.event_name == 'issue_comment' && 'user-comment-request') || 'ci-failure-or-review' }}
+          FAILURE_DETAILS: ${{ github.event.comment.body || format('Manual trigger for PR {0}', inputs.pr_number) }}
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        run: node .github/scripts/run-fix-pr.mjs
