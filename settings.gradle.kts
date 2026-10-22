@@ -24,3 +24,4 @@ dependencyResolutionManagement {
 
 rootProject.name = "Cruise-pos"
 include(":app")
+include(":shared")

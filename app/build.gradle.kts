@@ -5,16 +5,12 @@ plugins {
 
 android {
     namespace = "com.example.cruise_pos"
-    compileSdk {
-        version = release(36) {
-            minorApiLevel = 1
-        }
-    }
+    compileSdk = 37
 
     defaultConfig {
         applicationId = "com.example.cruise_pos"
-        minSdk = 36
-        targetSdk = 36
+        minSdk = 26
+        targetSdk = 35
         versionCode = 1
         versionName = "1.0"
 
@@ -38,6 +34,8 @@ android {
 }
 
 dependencies {
+    implementation(project(":shared"))
+
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.compose.material3)
