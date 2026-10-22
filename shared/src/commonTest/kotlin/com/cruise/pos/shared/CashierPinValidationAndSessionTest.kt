@@ -42,6 +42,7 @@ class CashierPinValidationAndSessionTest {
 
         // Verify sessionManager recognizes the session
         assertTrue(sessionManager.isSessionActive())
+        assertEquals(repository.getSavedToken(), sessionManager.getJwtToken())
         assertEquals(cashier.id, sessionManager.getCashierId())
         assertEquals(cashier.username, sessionManager.getCashierUsername())
         assertEquals(cashier.role, sessionManager.getCashierRole())

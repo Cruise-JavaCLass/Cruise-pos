@@ -29,7 +29,7 @@ class AuthRepositoryImpl(
 
         val cashier = CashierUser(
             id = 1L,
-            username = "cashier_$pin",
+            username = "cashier_duty",
             fullName = "Onboard Duty Cashier",
             role = "CASHIER",
             stationAssigned = stationId
