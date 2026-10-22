@@ -20,12 +20,16 @@ class CashierPinValidationAndSessionTest {
     fun testPinValidationStateMachine() = runTest {
         val settings = MapSettings()
         val storage = KmpTokenStorage(settings)
-        val repository = AuthRepositoryImpl(storage)
+        val sessionManager = KmpSessionManager(settings)
+        val repository = AuthRepositoryImpl(storage, sessionManager)
+
+        assertFalse(sessionManager.isSessionActive())
 
         // Test 1: PIN too short (less than 4 digits)
         val shortResult = repository.loginWithPin("123", "STATION_BAR_01")
         assertTrue(shortResult is ApiResult.Error)
         assertEquals("PIN must be at least 4 digits", (shortResult as ApiResult.Error).message)
+        assertFalse(sessionManager.isSessionActive())
 
         // Test 2: Valid 4-digit PIN
         val successResult = repository.loginWithPin("5566", "STATION_BAR_01")
@@ -35,6 +39,17 @@ class CashierPinValidationAndSessionTest {
         assertEquals("CASHIER", cashier.role)
         assertEquals("STATION_BAR_01", cashier.stationAssigned)
         assertNotNull(repository.getSavedToken())
+
+        // Verify sessionManager recognizes the session
+        assertTrue(sessionManager.isSessionActive())
+        assertEquals(cashier.id, sessionManager.getCashierId())
+        assertEquals(cashier.username, sessionManager.getCashierUsername())
+        assertEquals(cashier.role, sessionManager.getCashierRole())
+        assertEquals("STATION_BAR_01", sessionManager.getAssignedStationId())
+
+        // Logout clears session
+        repository.logout()
+        assertFalse(sessionManager.isSessionActive())
     }
 
     @Test

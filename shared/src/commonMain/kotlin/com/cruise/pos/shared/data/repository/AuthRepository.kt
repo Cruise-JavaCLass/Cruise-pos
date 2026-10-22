@@ -1,6 +1,7 @@
 package com.cruise.pos.shared.data.repository
 
 import com.cruise.pos.shared.core.network.ApiResult
+import com.cruise.pos.shared.core.security.SessionManager
 import com.cruise.pos.shared.core.storage.TokenStorage
 import com.cruise.pos.shared.domain.model.CashierUser
 
@@ -12,7 +13,8 @@ interface AuthRepository {
 }
 
 class AuthRepositoryImpl(
-    private val tokenStorage: TokenStorage
+    private val tokenStorage: TokenStorage,
+    private val sessionManager: SessionManager? = null
 ) : AuthRepository {
 
     override suspend fun loginWithPin(pin: String, stationId: String): ApiResult<CashierUser> {
@@ -33,6 +35,15 @@ class AuthRepositoryImpl(
             stationAssigned = stationId
         )
 
+        // Write successful PIN login session into SessionManager
+        sessionManager?.saveSession(
+            token = fakeToken,
+            cashierId = cashier.id,
+            username = cashier.username,
+            role = cashier.role,
+            stationId = stationId
+        )
+
         return ApiResult.Success(cashier)
     }
 
@@ -40,6 +51,7 @@ class AuthRepositoryImpl(
 
     override fun logout() {
         tokenStorage.clearToken()
+        sessionManager?.clearSession()
     }
 
     override fun getSavedStation(): String? = tokenStorage.getCurrentStation()
