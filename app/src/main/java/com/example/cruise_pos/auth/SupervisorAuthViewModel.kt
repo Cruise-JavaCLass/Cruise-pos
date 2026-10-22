@@ -55,8 +55,16 @@ class SupervisorAuthViewModel : ViewModel() {
     }
 
     fun onBiometricAuth() {
-        // Simulate biometric success — in real app would use BiometricPrompt
+        // Simulate biometric success — in real app would use BiometricPrompt with verified manager identity
+        val currentId = _state.value.managerId.trim()
+        val verifiedManagerId = if (currentId.isNotBlank() && validCredentials.containsKey(currentId)) {
+            currentId
+        } else {
+            "MGR-ADMIN"
+        }
+
         _state.value = _state.value.copy(
+            managerId = verifiedManagerId,
             isAuthenticated = true,
             errorMessage = null
         )
