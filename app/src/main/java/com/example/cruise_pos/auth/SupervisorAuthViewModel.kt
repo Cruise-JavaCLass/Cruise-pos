@@ -55,8 +55,25 @@ class SupervisorAuthViewModel : ViewModel() {
     }
 
     fun onBiometricAuth() {
-        // Simulate biometric success — in real app would use BiometricPrompt
+        val currentId = _state.value.managerId.trim()
+        if (currentId.isBlank()) {
+            _state.value = _state.value.copy(
+                errorMessage = "Manager ID is required for biometric authentication",
+                isAuthenticated = false
+            )
+            return
+        }
+
+        if (!validCredentials.containsKey(currentId)) {
+            _state.value = _state.value.copy(
+                errorMessage = "Unknown Manager ID for biometric authentication",
+                isAuthenticated = false
+            )
+            return
+        }
+
         _state.value = _state.value.copy(
+            managerId = currentId,
             isAuthenticated = true,
             errorMessage = null
         )

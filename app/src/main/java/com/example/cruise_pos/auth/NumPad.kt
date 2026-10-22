@@ -1,11 +1,10 @@
 package com.example.cruise_pos.auth
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.material3.ElevatedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -16,11 +15,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.cruise_pos.ui.theme.CruiseposTheme
 
-private val NUM_PAD_KEYS = listOf(
-    "1", "2", "3",
-    "4", "5", "6",
-    "7", "8", "9",
-    "*", "0", "⌫"
+private val NUM_PAD_ROWS = listOf(
+    listOf("1", "2", "3"),
+    listOf("4", "5", "6"),
+    listOf("7", "8", "9"),
+    listOf("*", "0", "⌫")
 )
 
 @Composable
@@ -29,31 +28,35 @@ fun NumPad(
     onBackspace: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    LazyVerticalGrid(
-        columns = GridCells.Fixed(3),
+    Column(
         modifier = modifier,
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
-        userScrollEnabled = false
+        verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        items(NUM_PAD_KEYS) { key ->
-            ElevatedButton(
-                onClick = {
-                    when (key) {
-                        "⌫" -> onBackspace()
-                        "*" -> { /* star key — no-op in PIN mode */ }
-                        else -> onDigit(key)
-                    }
-                },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .aspectRatio(1.6f)
+        NUM_PAD_ROWS.forEach { rowKeys ->
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                Text(
-                    text = key,
-                    fontSize = 20.sp,
-                    fontWeight = FontWeight.SemiBold
-                )
+                rowKeys.forEach { key ->
+                    ElevatedButton(
+                        onClick = {
+                            when (key) {
+                                "⌫" -> onBackspace()
+                                "*" -> { /* star key — no-op in PIN mode */ }
+                                else -> onDigit(key)
+                            }
+                        },
+                        modifier = Modifier
+                            .weight(1f)
+                            .aspectRatio(1.6f)
+                    ) {
+                        Text(
+                            text = key,
+                            fontSize = 20.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
+                }
             }
         }
     }
