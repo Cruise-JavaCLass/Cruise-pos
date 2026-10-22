@@ -10,6 +10,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -23,12 +24,14 @@ fun MenuItemCard(
     modifier: Modifier = Modifier
 ) {
     val isOos = item.is86ed
+    val isLowStock = item.isLowStock
 
     Card(
         modifier = modifier
             .fillMaxWidth()
             .height(175.dp)
             .clip(RoundedCornerShape(12.dp))
+            .testTag("menu_item_card_${item.id}")
             .clickable(enabled = !isOos) { onClick(item) },
         shape = RoundedCornerShape(12.dp),
         colors = CardDefaults.cardColors(
@@ -47,7 +50,7 @@ fun MenuItemCard(
                     .padding(12.dp),
                 verticalArrangement = Arrangement.SpaceBetween
             ) {
-                // Top section: Item name & category badge
+                // Top section: Item name & optional low stock badge
                 Column {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -63,6 +66,23 @@ fun MenuItemCard(
                             color = if (isOos) MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f) else MaterialTheme.colorScheme.onSurface,
                             modifier = Modifier.weight(1f)
                         )
+
+                        if (isLowStock && item.stockQuota != null) {
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Surface(
+                                shape = RoundedCornerShape(4.dp),
+                                color = MaterialTheme.colorScheme.errorContainer,
+                                modifier = Modifier.testTag("badge_low_stock_${item.id}")
+                            ) {
+                                Text(
+                                    text = "Only ${item.stockQuota} left",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onErrorContainer,
+                                    fontWeight = FontWeight.Bold,
+                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                )
+                            }
+                        }
                     }
 
                     if (item.description.isNotEmpty()) {
@@ -111,16 +131,17 @@ fun MenuItemCard(
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
-                        .background(Color.Black.copy(alpha = 0.15f)),
+                        .background(Color.Black.copy(alpha = 0.25f))
+                        .testTag("badge_86_sold_out_${item.id}"),
                     contentAlignment = Alignment.Center
                 ) {
                     Surface(
                         shape = RoundedCornerShape(8.dp),
                         color = MaterialTheme.colorScheme.error,
-                        shadowElevation = 4.dp
+                        shadowElevation = 6.dp
                     ) {
                         Row(
-                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Text(
