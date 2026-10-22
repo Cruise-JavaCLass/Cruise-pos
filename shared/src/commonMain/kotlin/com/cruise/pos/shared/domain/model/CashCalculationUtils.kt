@@ -16,6 +16,15 @@ object CashCalculationUtils {
     }
 
     /**
+     * Calculates expected drawer cash after taking mid-shift cash drops into account:
+     * Current Drawer Cash = Starting Float + Cash Sales - Total Cash Drops
+     */
+    fun calculateExpectedCash(startingFloat: Double, cashSales: Double, totalCashDrops: Double = 0.0): Double {
+        val expected = startingFloat + cashSales - totalCashDrops
+        return roundToTwoDecimals(expected)
+    }
+
+    /**
      * Calculates reconciliation difference between actual counted cash and expected cash.
      * Positive value = Over (surplus)
      * Negative value = Short (deficit)
@@ -23,6 +32,13 @@ object CashCalculationUtils {
      */
     fun calculateDiscrepancy(actualCounted: Double, expected: Double): Double {
         return roundToTwoDecimals(actualCounted - expected)
+    }
+
+    /**
+     * Validates whether a proposed cash drop amount is legal (positive and not exceeding cash in drawer)
+     */
+    fun isValidCashDrop(amount: Double, currentDrawerCash: Double): Boolean {
+        return amount > 0.0 && amount <= currentDrawerCash
     }
 
     /**
