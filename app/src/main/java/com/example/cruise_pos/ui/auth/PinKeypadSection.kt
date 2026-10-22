@@ -15,6 +15,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -56,7 +58,11 @@ fun PinKeypadSection(
         // PIN Dot indicators
         Row(
             horizontalArrangement = Arrangement.spacedBy(16.dp),
-            modifier = Modifier.padding(bottom = 24.dp)
+            modifier = Modifier
+                .padding(bottom = 24.dp)
+                .semantics {
+                    stateDescription = "${currentPin.length} of $pinLength digits entered"
+                }
         ) {
             for (i in 0 until pinLength) {
                 val isFilled = i < currentPin.length
