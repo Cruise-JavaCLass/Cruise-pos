@@ -1,11 +1,17 @@
 package com.example.cruise_pos
 
-import androidx.compose.runtime.*
-import androidx.compose.ui.test.*
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performClick
 import com.cruise.pos.shared.domain.model.PosStation
 import com.example.cruise_pos.ui.auth.PinKeypadSection
 import com.example.cruise_pos.ui.auth.StationSelectorDropdown
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 
@@ -33,19 +39,19 @@ class CashierPinLoginUiTest {
         composeTestRule.onNodeWithText("2").performClick()
         composeTestRule.onNodeWithText("3").performClick()
 
-        assert(currentPin == "123")
+        assertEquals("123", currentPin)
 
         // Tap backspace
         composeTestRule.onNodeWithText("⌫").performClick()
-        assert(currentPin == "12")
+        assertEquals("12", currentPin)
 
         // Tap clear
         composeTestRule.onNodeWithText("C").performClick()
-        assert(currentPin.isEmpty())
+        assertTrue(currentPin.isEmpty())
     }
 
     @Test
-    fun testStationSelectorDisplay() {
+    fun testStationSelectorDisplayAndSelection() {
         var selectedStation by mutableStateOf(PosStation.DEFAULT_STATIONS[0])
 
         composeTestRule.setContent {
@@ -55,8 +61,21 @@ class CashierPinLoginUiTest {
             )
         }
 
+        // Verify initial station display
         composeTestRule.onNodeWithText("ASSIGNED TERMINAL OUTLET").assertIsDisplayed()
         composeTestRule.onNodeWithText("Lido Deck Pool Bar").assertIsDisplayed()
         composeTestRule.onNodeWithText("Deck 9 • BAR").assertIsDisplayed()
+
+        // Open dropdown by clicking current selection
+        composeTestRule.onNodeWithText("Lido Deck Pool Bar").performClick()
+
+        // Select a different station (e.g. Ocean View Dining Room)
+        val targetStation = PosStation.DEFAULT_STATIONS[1]
+        composeTestRule.onNodeWithText(targetStation.stationName).performClick()
+
+        // Assert that state and UI updated
+        assertEquals(targetStation, selectedStation)
+        composeTestRule.onNodeWithText(targetStation.stationName).assertIsDisplayed()
+        composeTestRule.onNodeWithText("Deck ${targetStation.deckNumber} • ${targetStation.outletCategory}").assertIsDisplayed()
     }
 }
