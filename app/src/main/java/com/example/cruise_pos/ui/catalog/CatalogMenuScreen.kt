@@ -6,6 +6,7 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
@@ -19,9 +20,15 @@ fun CatalogMenuScreen(
     onAddToCart: (ConfiguredCartItem) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    var searchQuery by remember { mutableStateOf("") }
-    var selectedCategoryId by remember { mutableStateOf<String?>(null) }
-    var itemForCustomization by remember { mutableStateOf<MenuItem?>(null) }
+    var searchQuery by rememberSaveable { mutableStateOf("") }
+    var selectedCategoryId by rememberSaveable { mutableStateOf<String?>(null) }
+    var itemForCustomizationId by rememberSaveable { mutableStateOf<String?>(null) }
+
+    val itemForCustomization = remember(itemForCustomizationId, menuItems) {
+        itemForCustomizationId?.let { id ->
+            menuItems.firstOrNull { it.id == id && it.isAvailable }
+        }
+    }
 
     val filteredItems = remember(menuItems, selectedCategoryId, searchQuery) {
         CatalogFilterUtils.filterItems(menuItems, selectedCategoryId, searchQuery)
@@ -66,7 +73,7 @@ fun CatalogMenuScreen(
                         item = item,
                         onClick = {
                             if (item.modifierGroups.isNotEmpty()) {
-                                itemForCustomization = item
+                                itemForCustomizationId = item.id
                             } else {
                                 onAddToCart(ConfiguredCartItem(menuItem = item, quantity = 1))
                             }
@@ -79,13 +86,15 @@ fun CatalogMenuScreen(
 
     // Modifier Customization BottomSheet
     itemForCustomization?.let { item ->
-        ModifierSelectionBottomSheet(
-            menuItem = item,
-            onConfirmSelection = { configuredItem ->
-                onAddToCart(configuredItem)
-                itemForCustomization = null
-            },
-            onDismiss = { itemForCustomization = null }
-        )
+        key(item.id) {
+            ModifierSelectionBottomSheet(
+                menuItem = item,
+                onConfirmSelection = { configuredItem ->
+                    onAddToCart(configuredItem)
+                    itemForCustomizationId = null
+                },
+                onDismiss = { itemForCustomizationId = null }
+            )
+        }
     }
 }

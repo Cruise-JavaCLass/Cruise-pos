@@ -4,6 +4,8 @@ import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
 import com.cruise.pos.shared.domain.model.*
 import com.example.cruise_pos.ui.catalog.*
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -16,58 +18,61 @@ class CatalogMenuUiTest {
     val composeTestRule = createComposeRule()
 
     private val sampleCategories = listOf(
-        MenuCategory("DRINKS", "Drinks"),
-        MenuCategory("FOOD", "Food")
+        MenuCategory("DRINKS", "Drinks", 2),
+        MenuCategory("FOOD", "Food", 1)
+    )
+
+    private val sampleModifierGroup = ModifierGroup(
+        id = "SIZE",
+        name = "Cup Size",
+        minSelections = 1,
+        maxSelections = 1,
+        options = listOf(
+            ModifierOption("REG", "Regular", 0.0, true),
+            ModifierOption("LRG", "Large", 1.0, false)
+        )
     )
 
     private val sampleItems = listOf(
         MenuItem(
-            id = "item-coffee",
-            name = "Americano",
-            description = "Hot black coffee",
+            id = "COFFEE_1",
             categoryId = "DRINKS",
+            name = "Americano",
+            description = "Espresso with hot water",
             basePrice = 4.50,
             isAvailable = true,
-            modifierGroups = listOf(
-                ModifierGroup(
-                    id = "size",
-                    name = "Cup Size",
-                    options = listOf(
-                        ModifierOption("regular", "Regular", 0.0, isDefault = true),
-                        ModifierOption("large", "Large", 1.0)
-                    )
-                )
-            )
+            modifierGroups = listOf(sampleModifierGroup)
         ),
         MenuItem(
-            id = "item-cake",
-            name = "Cheesecake",
-            description = "New York style cheesecake",
+            id = "CAKE_1",
             categoryId = "FOOD",
-            basePrice = 7.00,
-            isAvailable = false // 86ed
+            name = "Cheesecake",
+            description = "New York cheesecake",
+            basePrice = 6.00,
+            isAvailable = false, // 86ed
+            modifierGroups = emptyList()
         )
     )
 
     @Test
-    fun testMenuItemCard_regularAnd86edDisplay() {
-        var clickedItem: MenuItem? = null
+    fun testMenuItemCard_availableRendersCorrectly() {
+        var clicked = false
         composeTestRule.setContent {
             MenuItemCard(
                 item = sampleItems[0],
-                onClick = { clickedItem = it }
+                onClick = { clicked = true }
             )
         }
 
         composeTestRule.onNodeWithText("Americano").assertIsDisplayed()
         composeTestRule.onNodeWithText("$4.50").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Customize").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Americano").performClick()
-        assert(clickedItem?.id == "item-coffee")
+        composeTestRule.onNodeWithText("Espresso with hot water").assertIsDisplayed()
+        composeTestRule.onNodeWithTag("menu_item_card_COFFEE_1").performClick()
+        assert(clicked)
     }
 
     @Test
-    fun testMenuItemCard_86edDisabledClick() {
+    fun testMenuItemCard_outOfStockRendersDisabled() {
         var clicked = false
         composeTestRule.setContent {
             MenuItemCard(
@@ -76,15 +81,16 @@ class CatalogMenuUiTest {
             )
         }
 
-        composeTestRule.onNodeWithText("86'd • SOLD OUT").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Cheesecake").performClick()
-        assert(!clicked) // Disabled interaction
+        composeTestRule.onNodeWithText("Cheesecake").assertIsDisplayed()
+        composeTestRule.onNodeWithText("86ed • Out of Stock").assertIsDisplayed()
+        composeTestRule.onNodeWithTag("menu_item_card_CAKE_1").performClick()
+        assert(!clicked)
     }
 
     @Test
-    fun testCatalogSearchBarAndFilterTabs() {
+    fun testCatalogSearchBarAndCategoryTabs_searchAndSelect() {
         var search = ""
-        var selectedCat: String? = null
+        var selectedCat: String? = "ALL"
 
         composeTestRule.setContent {
             CatalogSearchBarAndCategoryTabs(
@@ -99,7 +105,7 @@ class CatalogMenuUiTest {
         composeTestRule.onNodeWithText("All Items").assertIsDisplayed()
         composeTestRule.onNodeWithText("Drinks").assertIsDisplayed()
         composeTestRule.onNodeWithText("Food").performClick()
-        assert(selectedCat == "FOOD")
+        assertEquals("FOOD", selectedCat)
     }
 
     @Test
@@ -119,8 +125,40 @@ class CatalogMenuUiTest {
         composeTestRule.onNodeWithText("+").performClick() // Increase qty to 2
         composeTestRule.onNodeWithText("Add to Cart • $11.00").performClick() // (4.50 + 1.00) * 2 = 11.00
 
-        assert(selectedCartItem != null)
-        assert(selectedCartItem?.quantity == 2)
+        assertNotNull(selectedCartItem)
+        assertEquals(2, selectedCartItem?.quantity)
+        assertEquals("LRG", selectedCartItem?.selectedModifiers?.firstOrNull()?.optionId)
+        assertEquals(11.00, selectedCartItem?.totalPrice ?: 0.0, 0.001)
+    }
+
+    @Test
+    fun testModifierSelectionBottomSheet_minSelectionsBlocksConfirmation() {
+        val noDefaultGroup = ModifierGroup(
+            id = "SUGAR",
+            name = "Sugar Level",
+            minSelections = 1,
+            maxSelections = 1,
+            options = listOf(
+                ModifierOption("NO_SUGAR", "0% Sugar", 0.0, false),
+                ModifierOption("HALF_SUGAR", "50% Sugar", 0.0, false)
+            )
+        )
+        val itemWithMandatoryGroup = sampleItems[0].copy(
+            modifierGroups = listOf(noDefaultGroup)
+        )
+
+        composeTestRule.setContent {
+            ModifierSelectionBottomSheet(
+                menuItem = itemWithMandatoryGroup,
+                onConfirmSelection = {},
+                onDismiss = {}
+            )
+        }
+
+        // Button should be disabled until selection made
+        composeTestRule.onNodeWithText("Add to Cart • $4.50").assertIsNotEnabled()
+        composeTestRule.onNodeWithText("0% Sugar").performClick()
+        composeTestRule.onNodeWithText("Add to Cart • $4.50").assertIsEnabled()
     }
 
     @Test

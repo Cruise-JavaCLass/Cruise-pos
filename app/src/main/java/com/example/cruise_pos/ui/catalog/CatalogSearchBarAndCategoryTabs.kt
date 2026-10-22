@@ -8,6 +8,7 @@ import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -44,6 +45,10 @@ fun CatalogSearchBarAndCategoryTabs(
                 .padding(horizontal = 16.dp, vertical = 8.dp)
         )
 
+        val sortedCategories = remember(categories) {
+            categories.sortedBy { it.displayOrder }
+        }
+
         // Category Filter Carousel / Tabs
         Row(
             modifier = Modifier
@@ -60,7 +65,7 @@ fun CatalogSearchBarAndCategoryTabs(
                 label = { Text("All Items") }
             )
 
-            categories.forEach { category ->
+            sortedCategories.forEach { category ->
                 val isSelected = category.id.equals(selectedCategoryId, ignoreCase = true)
                 FilterChip(
                     selected = isSelected,

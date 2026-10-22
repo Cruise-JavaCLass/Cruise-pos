@@ -25,17 +25,22 @@ fun ModifierSelectionBottomSheet(
     val selectedOptions = remember {
         mutableStateMapOf<String, MutableSet<ModifierOption>>().apply {
             menuItem.modifierGroups.forEach { group ->
-                val defaultOpt = group.options.firstOrNull { it.isDefault } ?: group.options.firstOrNull()
-                if (defaultOpt != null) {
-                    put(group.id, mutableSetOf(defaultOpt))
-                } else {
-                    put(group.id, mutableSetOf())
-                }
+                val defaultOpts = group.options.filter { it.isDefault }.take(group.maxSelections)
+                put(group.id, defaultOpts.toMutableSet())
             }
         }
     }
 
     var quantity by remember { mutableIntStateOf(1) }
+
+    val isSelectionValid = remember {
+        derivedStateOf {
+            menuItem.modifierGroups.all { group ->
+                val count = selectedOptions[group.id]?.size ?: 0
+                count >= group.minSelections && count <= group.maxSelections
+            }
+        }
+    }
 
     val currentTotal = remember {
         derivedStateOf {
@@ -188,6 +193,7 @@ fun ModifierSelectionBottomSheet(
                 }
 
                 Button(
+                    enabled = isSelectionValid.value,
                     onClick = {
                         val flatModifiers = mutableListOf<SelectedModifier>()
                         menuItem.modifierGroups.forEach { group ->
