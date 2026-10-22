@@ -15,7 +15,7 @@ interface SessionManager {
 }
 
 class KmpSessionManager(
-    private val settings: Settings = Settings()
+    private val settings: Settings
 ) : SessionManager {
 
     companion object {
