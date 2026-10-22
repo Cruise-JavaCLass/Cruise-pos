@@ -8,3 +8,9 @@ app/build/
 captures/
 .externalNativeBuild/
 .cxx/
+
+# Repomix outputs
+repomix-*.xml
+repomix-*.txt
+repomix-*.md
+repomix-output.*
