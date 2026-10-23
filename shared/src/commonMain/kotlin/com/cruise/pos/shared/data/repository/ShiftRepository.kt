@@ -208,7 +208,7 @@ class ShiftRepositoryImpl(
             cashierId = request.cashierId,
             witnessId = request.witnessId,
             receiptNumber = "SAFE-DROP-${shift.id}-${(1000..9999).random()}",
-            safeBalanceAfter = 10000.0 + shift.totalCashDrops + request.amount,
+            safeBalanceAfter = kotlin.math.round((10000.0 + shift.totalCashDrops + request.amount) * 100.0) / 100.0,
             denominations = request.denominations,
             droppedAt = nowIso,
             notes = request.notes
@@ -227,7 +227,7 @@ class ShiftRepositoryImpl(
             applied = current != null && current.id == drop.shiftId
             if (current != null && applied) {
                 current.copy(
-                    totalCashDrops = current.totalCashDrops + drop.amount,
+                    totalCashDrops = kotlin.math.round((current.totalCashDrops + drop.amount) * 100.0) / 100.0,
                     cashDropHistory = current.cashDropHistory + drop
                 )
             } else {

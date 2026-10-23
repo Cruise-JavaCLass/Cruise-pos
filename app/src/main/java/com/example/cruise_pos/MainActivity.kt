@@ -180,8 +180,9 @@ fun MainScreen(
                     )
                     when (val result = shiftRepository.recordCashDrop(request)) {
                         is ApiResult.Success -> {
-                            currentDrawerCash -= amount
-                            dropResult = "Transferred $${"%.2f".format(amount)} to Ship Safe (Receipt: ${result.data.receiptNumber}, Witness: $witnessId). Notes: $notes"
+                            currentDrawerCash -= result.data.amount
+                            val noteSuffix = if (!result.data.notes.isNullOrBlank()) " Notes: ${result.data.notes}" else ""
+                            dropResult = java.lang.String.format(java.util.Locale.US, "Transferred $%.2f to Ship Safe (Receipt: %s, Witness: %s).%s", result.data.amount, result.data.receiptNumber, result.data.witnessId, noteSuffix)
                             isSubmittingDrop = false
                             dropErrorMessage = null
                             showCashDropDialog = false
