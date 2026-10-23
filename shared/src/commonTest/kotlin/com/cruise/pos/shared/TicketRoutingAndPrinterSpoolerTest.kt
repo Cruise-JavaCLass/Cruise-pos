@@ -14,6 +14,7 @@ import com.cruise.pos.shared.hardware.network.EscPosNetworkPrinterClient
 import com.cruise.pos.shared.hardware.network.PrintResult
 import com.cruise.pos.shared.hardware.template.KitchenOrderTicketTemplate
 import com.russhwolf.settings.MapSettings
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -27,7 +28,8 @@ class TicketRoutingAndPrinterSpoolerTest {
 
     private class MockPrinterClient(
         var failingHosts: Set<String> = emptySet(),
-        var throwTimeoutOn: Set<String> = emptySet()
+        var throwTimeoutOn: Set<String> = emptySet(),
+        var throwCancellationOn: Set<String> = emptySet()
     ) : EscPosNetworkPrinterClient {
         val printedPayloads = mutableListOf<Triple<String, Int, ByteArray>>()
 
@@ -37,6 +39,9 @@ class TicketRoutingAndPrinterSpoolerTest {
             payload: ByteArray,
             timeoutMillis: Long
         ): PrintResult {
+            if (throwCancellationOn.contains(host)) {
+                throw CancellationException("Simulated coroutine cancellation during print to $host")
+            }
             if (throwTimeoutOn.contains(host)) {
                 return PrintResult.Failure(host, port, "SocketTimeoutException: Connection timed out after ${timeoutMillis}ms")
             }
@@ -77,6 +82,31 @@ class TicketRoutingAndPrinterSpoolerTest {
         // "coffee_tea" must consistently route to BAR for both destination and station
         assertEquals(DestinationType.BAR, engine.determineDestination("coffee_tea"))
         assertEquals(PrepStationType.BAR, engine.resolvePrepStation("coffee_tea", null))
+    }
+
+    @Test
+    fun testExplicitBarPrepStationRoutesToBarDestination() {
+        val request = OrderRoutingRequest(
+            orderId = "ORD-EXPLICIT-BAR",
+            terminalStationId = "T1",
+            serverName = "Alice",
+            timestampMillis = 1000L,
+            items = listOf(
+                TicketLineItem(
+                    itemId = "item-special-drink",
+                    name = "Signature Smoked Old Fashioned",
+                    categoryId = "specialty_menu",
+                    quantity = 1,
+                    prepStation = PrepStationType.BAR
+                )
+            )
+        )
+        val routed = engine.routeOrder(request)
+        assertEquals(0, routed.galleyTickets.size)
+        assertEquals(1, routed.barTickets.size)
+        val barTicket = routed.barTickets.first()
+        assertEquals(DestinationType.BAR, barTicket.destination)
+        assertEquals(PrepStationType.BAR, barTicket.stationType)
     }
 
     @Test
@@ -293,6 +323,7 @@ class TicketRoutingAndPrinterSpoolerTest {
 
         val job = spooler.enqueueAndDispatch(ticket, primary, backup, currentTimeMillis = 3000L)
         assertEquals(SpoolJobStatus.ALERT_TRIGGERED, job.status)
+        assertEquals(2, job.attempts) // Primary and backup both attempted
         assertEquals(0, client.printedPayloads.size)
         assertEquals(1, spooler.alerts.value.size)
 
@@ -302,7 +333,7 @@ class TicketRoutingAndPrinterSpoolerTest {
         assertEquals(1, retryBackupJobs.size)
         val backupSuccessJob = retryBackupJobs.first()
         assertEquals(SpoolJobStatus.FAILED_OVER_TO_BACKUP, backupSuccessJob.status)
-        assertEquals(2, backupSuccessJob.attempts)
+        assertEquals(4, backupSuccessJob.attempts) // 2 calls initially + 2 calls during retry
         assertEquals(1, client.printedPayloads.size)
         assertEquals("192.168.1.51", client.printedPayloads.first().first)
 
@@ -320,13 +351,14 @@ class TicketRoutingAndPrinterSpoolerTest {
         client.failingHosts = setOf("192.168.1.50", "192.168.1.51")
         val job2 = spooler.enqueueAndDispatch(ticket2, primary, backup, currentTimeMillis = 4000L)
         assertEquals(SpoolJobStatus.ALERT_TRIGGERED, job2.status)
+        assertEquals(2, job2.attempts)
 
         client.failingHosts = emptySet()
         val restoredSpooler = PrinterSpoolerQueue(client, sharedSettings)
         val retriedRestored = restoredSpooler.retryPendingJobs(currentTimeMillis = 4500L)
         assertEquals(1, retriedRestored.size)
         assertEquals(SpoolJobStatus.SENT_TO_PRIMARY, retriedRestored.first().status)
-        assertEquals(2, retriedRestored.first().attempts)
+        assertEquals(3, retriedRestored.first().attempts) // 2 calls initially + 1 primary call
     }
 
     @Test
@@ -349,18 +381,84 @@ class TicketRoutingAndPrinterSpoolerTest {
         assertEquals(SpoolJobStatus.ALERT_TRIGGERED, job.status)
         assertEquals(1, job.attempts)
 
+        // Assert initial alert count and affected job id before retries
+        assertEquals(1, spooler.alerts.value.size)
+        val initialAlert = spooler.alerts.value.first()
+        assertEquals(job.jobId, initialAlert.affectedJobId)
+
         // Retry 1: attempts becomes 2, maxAttempts is 3 -> still ALERT_TRIGGERED
         val retry1 = spooler.retryPendingJobs(currentTimeMillis = 5100L)
         assertEquals(1, retry1.size)
         assertEquals(2, retry1.first().attempts)
         assertEquals(SpoolJobStatus.ALERT_TRIGGERED, retry1.first().status)
+        assertEquals(1, spooler.alerts.value.size)
 
         // Retry 2: attempts becomes 3 >= 3 -> FAILED with offline alert
         val retry2 = spooler.retryPendingJobs(currentTimeMillis = 5200L)
         assertEquals(1, retry2.size)
         assertEquals(3, retry2.first().attempts)
         assertEquals(SpoolJobStatus.FAILED, retry2.first().status)
-        assertTrue(spooler.alerts.value.any { it.affectedJobId == job.jobId })
+
+        // Verify the alert count and message for permanently failed job
+        assertEquals(1, spooler.alerts.value.size)
+        val terminalAlert = spooler.alerts.value.first()
+        assertEquals(job.jobId, terminalAlert.affectedJobId)
+        assertTrue(terminalAlert.message.contains("ABANDONED/FAILED"))
+    }
+
+    @Test
+    fun testRetryCancellationLeavesFinishedJobsAndResetsInFlightForNextCall() = runTest {
+        val printerSuccess = PrinterEndpoint("p-1", "Printer 1", DestinationType.GALLEY, PrepStationType.HOT_LINE, "192.168.1.100")
+        val printerCancel = PrinterEndpoint("p-2", "Printer 2", DestinationType.GALLEY, PrepStationType.HOT_LINE, "cancel-host")
+
+        // Initially both fail to get queued into ALERT_TRIGGERED
+        val client = MockPrinterClient(failingHosts = setOf("192.168.1.100", "cancel-host"))
+        val spooler = PrinterSpoolerQueue(client, MapSettings())
+
+        val ticket1 = engine.routeOrder(
+            OrderRoutingRequest(
+                orderId = "ORD-CANCEL-1",
+                terminalStationId = "T1",
+                serverName = "Alice",
+                timestampMillis = 1000L,
+                items = listOf(TicketLineItem("1", "Item1", "hot_entrees"))
+            )
+        ).galleyTickets.first()
+
+        val ticket2 = engine.routeOrder(
+            OrderRoutingRequest(
+                orderId = "ORD-CANCEL-2",
+                terminalStationId = "T1",
+                serverName = "Bob",
+                timestampMillis = 1000L,
+                items = listOf(TicketLineItem("2", "Item2", "hot_entrees"))
+            )
+        ).galleyTickets.first()
+
+        spooler.enqueueAndDispatch(ticket1, printerSuccess, currentTimeMillis = 1000L)
+        spooler.enqueueAndDispatch(ticket2, printerCancel, currentTimeMillis = 1000L)
+
+        // Now set printer 1 healthy, but printer 2 will throw CancellationException during print
+        client.failingHosts = emptySet()
+        client.throwCancellationOn = setOf("cancel-host")
+
+        assertFailsWith<CancellationException> {
+            spooler.retryPendingJobs(currentTimeMillis = 2000L)
+        }
+
+        // Job 1 must have completed SENT_TO_PRIMARY, Job 2 must be reset to ALERT_TRIGGERED (not stuck IN_FLIGHT)
+        val snapshotAfterCancel = spooler.getQueueSnapshot()
+        val job1Status = snapshotAfterCancel.first { it.ticket.orderId == "ORD-CANCEL-1" }.status
+        val job2Status = snapshotAfterCancel.first { it.ticket.orderId == "ORD-CANCEL-2" }.status
+        assertEquals(SpoolJobStatus.SENT_TO_PRIMARY, job1Status)
+        assertEquals(SpoolJobStatus.ALERT_TRIGGERED, job2Status)
+
+        // Subsequent retry succeeds for Job 2 once cancellation condition is removed
+        client.throwCancellationOn = emptySet()
+        val retryFollowUp = spooler.retryPendingJobs(currentTimeMillis = 3000L)
+        assertEquals(1, retryFollowUp.size)
+        assertEquals("ORD-CANCEL-2", retryFollowUp.first().ticket.orderId)
+        assertEquals(SpoolJobStatus.SENT_TO_PRIMARY, retryFollowUp.first().status)
     }
 
     @Test

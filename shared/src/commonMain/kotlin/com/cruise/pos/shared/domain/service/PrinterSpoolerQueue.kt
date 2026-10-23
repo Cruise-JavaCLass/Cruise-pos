@@ -7,11 +7,14 @@ import com.cruise.pos.shared.hardware.network.EscPosNetworkPrinterClient
 import com.cruise.pos.shared.hardware.network.PrintResult
 import com.cruise.pos.shared.hardware.template.KitchenOrderTicketTemplate
 import com.russhwolf.settings.Settings
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
@@ -128,6 +131,64 @@ class PrinterSpoolerQueue(
         return candidate
     }
 
+    private suspend fun dispatchOnce(
+        job: SpooledPrintJob,
+        payload: ByteArray,
+        currentTimeMillis: Long
+    ): SpooledPrintJob {
+        val primaryResult = printerClient.print(
+            host = job.targetPrinter.host,
+            port = job.targetPrinter.port,
+            payload = payload
+        )
+
+        if (primaryResult is PrintResult.Success) {
+            return job.copy(
+                attempts = job.attempts + 1,
+                status = SpoolJobStatus.SENT_TO_PRIMARY,
+                completedAtMillis = currentTimeMillis,
+                lastError = null
+            )
+        }
+
+        val primaryError = (primaryResult as PrintResult.Failure).reason
+        if (job.backupPrinter != null) {
+            val backupResult = printerClient.print(
+                host = job.backupPrinter.host,
+                port = job.backupPrinter.port,
+                payload = payload
+            )
+
+            if (backupResult is PrintResult.Success) {
+                return job.copy(
+                    attempts = job.attempts + 2,
+                    status = SpoolJobStatus.FAILED_OVER_TO_BACKUP,
+                    completedAtMillis = currentTimeMillis,
+                    lastError = "Primary printer [${job.targetPrinter.name}] offline: $primaryError. Rerouted to backup [${job.backupPrinter.name}]"
+                )
+            }
+
+            val backupError = (backupResult as PrintResult.Failure).reason
+            val nextAttempts = job.attempts + 2
+            val isExhausted = nextAttempts >= job.maxAttempts
+            return job.copy(
+                attempts = nextAttempts,
+                status = if (isExhausted) SpoolJobStatus.FAILED else SpoolJobStatus.ALERT_TRIGGERED,
+                completedAtMillis = if (isExhausted) currentTimeMillis else null,
+                lastError = "All printers unreachable. Primary: $primaryError, Backup: $backupError"
+            )
+        } else {
+            val nextAttempts = job.attempts + 1
+            val isExhausted = nextAttempts >= job.maxAttempts
+            return job.copy(
+                attempts = nextAttempts,
+                status = if (isExhausted) SpoolJobStatus.FAILED else SpoolJobStatus.ALERT_TRIGGERED,
+                completedAtMillis = if (isExhausted) currentTimeMillis else null,
+                lastError = primaryError
+            )
+        }
+    }
+
     suspend fun enqueueAndDispatch(
         ticket: PreparedTicket,
         primaryPrinter: PrinterEndpoint,
@@ -143,7 +204,7 @@ class PrinterSpoolerQueue(
             }
         }
 
-        // 1. Enqueue job under lock
+        // 1. Enqueue job under lock with status IN_FLIGHT so concurrent retries skip it
         val initialJob = mutex.withLock {
             val jobId = generateUniqueJobId(ticket.ticketId, currentTimeMillis)
             val job = SpooledPrintJob(
@@ -151,7 +212,8 @@ class PrinterSpoolerQueue(
                 ticket = ticket,
                 targetPrinter = primaryPrinter,
                 backupPrinter = backupPrinter,
-                createdAtMillis = currentTimeMillis
+                createdAtMillis = currentTimeMillis,
+                status = SpoolJobStatus.IN_FLIGHT
             )
             inMemoryQueue.add(job)
             _jobs.value = inMemoryQueue.toList()
@@ -161,59 +223,37 @@ class PrinterSpoolerQueue(
 
         val payload = KitchenOrderTicketTemplate.buildEscPosPayload(ticket)
 
-        // 2. Dispatch outside lock: Attempt Primary Printer
-        val primaryResult = printerClient.print(
-            host = primaryPrinter.host,
-            port = primaryPrinter.port,
-            payload = payload
-        )
-
-        if (primaryResult is PrintResult.Success) {
-            val completedJob = initialJob.copy(
-                attempts = 1,
-                status = SpoolJobStatus.SENT_TO_PRIMARY,
-                completedAtMillis = currentTimeMillis
-            )
-            mutex.withLock { updateJobUnderLock(completedJob) }
-            return completedJob
-        }
-
-        // 3. Primary failed -> Record error and attempt failover to Backup Printer outside lock
-        val primaryError = (primaryResult as PrintResult.Failure).reason
-
-        if (backupPrinter != null) {
-            val backupResult = printerClient.print(
-                host = backupPrinter.host,
-                port = backupPrinter.port,
-                payload = payload
-            )
-
-            if (backupResult is PrintResult.Success) {
-                val failedOverJob = initialJob.copy(
-                    attempts = 2,
-                    status = SpoolJobStatus.FAILED_OVER_TO_BACKUP,
-                    lastError = "Primary printer [${primaryPrinter.name}] offline: $primaryError. Rerouted to backup [${backupPrinter.name}]",
-                    completedAtMillis = currentTimeMillis
-                )
+        // 2. Dispatch outside lock with cancellation safety
+        val outcome: SpooledPrintJob
+        try {
+            outcome = dispatchOnce(initialJob, payload, currentTimeMillis)
+        } catch (e: CancellationException) {
+            withContext(NonCancellable) {
                 mutex.withLock {
-                    triggerOfflineAlertUnderLock(primaryPrinter, primaryError, initialJob.jobId, currentTimeMillis)
-                    updateJobUnderLock(failedOverJob)
+                    updateJobUnderLock(initialJob.copy(status = SpoolJobStatus.ALERT_TRIGGERED))
                 }
-                return failedOverJob
             }
+            throw e
         }
 
-        // 4. Both failed / primary failed with no backup
-        val finalJob = initialJob.copy(
-            attempts = 1,
-            status = SpoolJobStatus.ALERT_TRIGGERED,
-            lastError = "All printers unreachable. Primary: $primaryError"
-        )
+        // 3. Reacquire lock to persist and trigger alert if primary failed
         mutex.withLock {
-            triggerOfflineAlertUnderLock(primaryPrinter, primaryError, initialJob.jobId, currentTimeMillis)
-            updateJobUnderLock(finalJob)
+            if (outcome.status == SpoolJobStatus.FAILED_OVER_TO_BACKUP ||
+                outcome.status == SpoolJobStatus.ALERT_TRIGGERED ||
+                outcome.status == SpoolJobStatus.FAILED
+            ) {
+                val primaryError = outcome.lastError ?: "Primary printer offline"
+                triggerOfflineAlertUnderLock(
+                    printer = primaryPrinter,
+                    reason = primaryError,
+                    jobId = initialJob.jobId,
+                    timestamp = currentTimeMillis,
+                    isTerminal = (outcome.status == SpoolJobStatus.FAILED)
+                )
+            }
+            updateJobUnderLock(outcome)
         }
-        return finalJob
+        return outcome
     }
 
     suspend fun retryPendingJobs(currentTimeMillis: Long): List<SpooledPrintJob> {
@@ -237,61 +277,36 @@ class PrinterSpoolerQueue(
 
         if (toRetry.isEmpty()) return emptyList()
 
-        // 2. Perform print attempts outside lock
+        // 2. Perform print attempts outside lock with cancellation protection
         val dispatchOutcomes = mutableListOf<SpooledPrintJob>()
-        for (job in toRetry) {
-            val payload = KitchenOrderTicketTemplate.buildEscPosPayload(job.ticket)
-            val primaryResult = printerClient.print(
-                host = job.targetPrinter.host,
-                port = job.targetPrinter.port,
-                payload = payload
-            )
-
-            if (primaryResult is PrintResult.Success) {
-                dispatchOutcomes.add(
-                    job.copy(
-                        attempts = job.attempts + 1,
-                        status = SpoolJobStatus.SENT_TO_PRIMARY,
-                        completedAtMillis = currentTimeMillis,
-                        lastError = null
-                    )
-                )
-            } else {
-                val primaryError = (primaryResult as PrintResult.Failure).reason
-                var backupSuccess = false
-
-                if (job.backupPrinter != null) {
-                    val backupResult = printerClient.print(
-                        host = job.backupPrinter.host,
-                        port = job.backupPrinter.port,
-                        payload = payload
-                    )
-                    if (backupResult is PrintResult.Success) {
-                        backupSuccess = true
-                        dispatchOutcomes.add(
-                            job.copy(
-                                attempts = job.attempts + 1,
-                                status = SpoolJobStatus.FAILED_OVER_TO_BACKUP,
-                                completedAtMillis = currentTimeMillis,
-                                lastError = "Primary printer [${job.targetPrinter.name}] offline: $primaryError. Rerouted to backup [${job.backupPrinter.name}]"
+        try {
+            for (job in toRetry) {
+                val payload = KitchenOrderTicketTemplate.buildEscPosPayload(job.ticket)
+                val outcome = dispatchOnce(job, payload, currentTimeMillis)
+                dispatchOutcomes.add(outcome)
+            }
+        } catch (e: CancellationException) {
+            withContext(NonCancellable) {
+                mutex.withLock {
+                    val finishedIds = dispatchOutcomes.mapTo(HashSet()) { it.jobId }
+                    for (outcome in dispatchOutcomes) {
+                        if (outcome.status == SpoolJobStatus.FAILED) {
+                            triggerOfflineAlertUnderLock(
+                                printer = outcome.targetPrinter,
+                                reason = outcome.lastError ?: "Max retry attempts reached",
+                                jobId = outcome.jobId,
+                                timestamp = currentTimeMillis,
+                                isTerminal = true
                             )
-                        )
+                        }
+                        updateJobUnderLock(outcome)
+                    }
+                    toRetry.filter { it.jobId !in finishedIds }.forEach {
+                        updateJobUnderLock(it.copy(status = SpoolJobStatus.ALERT_TRIGGERED))
                     }
                 }
-
-                if (!backupSuccess) {
-                    val nextAttempts = job.attempts + 1
-                    val isExhausted = nextAttempts >= job.maxAttempts
-                    dispatchOutcomes.add(
-                        job.copy(
-                            attempts = nextAttempts,
-                            lastError = primaryError,
-                            status = if (isExhausted) SpoolJobStatus.FAILED else SpoolJobStatus.ALERT_TRIGGERED,
-                            completedAtMillis = if (isExhausted) currentTimeMillis else null
-                        )
-                    )
-                }
             }
+            throw e
         }
 
         // 3. Reacquire lock to apply results, persist, and trigger alerts if FAILED
@@ -303,7 +318,8 @@ class PrinterSpoolerQueue(
                         printer = outcome.targetPrinter,
                         reason = outcome.lastError ?: "Max retry attempts reached",
                         jobId = outcome.jobId,
-                        timestamp = currentTimeMillis
+                        timestamp = currentTimeMillis,
+                        isTerminal = true
                     )
                 }
                 updateJobUnderLock(outcome)
@@ -345,22 +361,24 @@ class PrinterSpoolerQueue(
         printer: PrinterEndpoint,
         reason: String,
         jobId: String,
-        timestamp: Long
+        timestamp: Long,
+        isTerminal: Boolean = false
     ) {
-        if (_alerts.value.any { it.affectedJobId == jobId && it.printerId == printer.id }) {
+        if (!isTerminal && _alerts.value.any { it.affectedJobId == jobId && it.printerId == printer.id }) {
             return
         }
+        val prefix = if (isTerminal) "ABANDONED/FAILED: " else ""
         val alertId = generateUniqueAlertId(printer.id, timestamp)
         val alert = SpoolerAlert(
             alertId = alertId,
             printerId = printer.id,
             printerName = printer.name,
             host = printer.host,
-            message = "Galley/Bar Printer [${printer.name}] at ${printer.host}:${printer.port} is OFFLINE: $reason. Check ship LAN or paper roll.",
+            message = "${prefix}Galley/Bar Printer [${printer.name}] at ${printer.host}:${printer.port} is OFFLINE: $reason. Check ship LAN or paper roll.",
             timestampMillis = timestamp,
             affectedJobId = jobId
         )
-        _alerts.value = _alerts.value + alert
+        _alerts.value = _alerts.value.filterNot { it.affectedJobId == jobId && it.printerId == printer.id } + alert
     }
 
     suspend fun dismissAlert(alertId: String) {

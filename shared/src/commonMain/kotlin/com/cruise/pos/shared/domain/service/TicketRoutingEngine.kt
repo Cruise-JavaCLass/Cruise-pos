@@ -38,7 +38,12 @@ class TicketRoutingEngine(
         require(request.items.isNotEmpty()) { "Cannot route order with empty items" }
 
         val partitionedByDestination = request.items.groupBy { item ->
-            determineDestination(item.categoryId)
+            val resolvedStation = resolvePrepStation(item.categoryId, item.prepStation)
+            if (resolvedStation == PrepStationType.BAR) {
+                DestinationType.BAR
+            } else {
+                determineDestination(item.categoryId)
+            }
         }
 
         val galleyItems = partitionedByDestination[DestinationType.GALLEY].orEmpty()
