@@ -13,6 +13,7 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.cruise.pos.shared.domain.model.*
+import kotlin.math.abs
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -23,8 +24,8 @@ fun ModifierSelectionBottomSheet(
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
-    // Store selected modifier options keyed by groupId
-    val selectedOptions = remember {
+    // Store selected modifier options keyed by groupId, keyed to menuItem to reinitialize if item changes
+    val selectedOptions = remember(menuItem) {
         mutableStateMapOf<String, MutableSet<ModifierOption>>().apply {
             menuItem.modifierGroups.forEach { group ->
                 val defaultOpts = group.options.filter { it.isDefault }.take(group.maxSelections)
@@ -33,9 +34,9 @@ fun ModifierSelectionBottomSheet(
         }
     }
 
-    var quantity by remember { mutableIntStateOf(1) }
+    var quantity by remember(menuItem) { mutableIntStateOf(1) }
 
-    val isSelectionValid = remember {
+    val isSelectionValid = remember(menuItem) {
         derivedStateOf {
             menuItem.modifierGroups.all { group ->
                 val count = selectedOptions[group.id]?.size ?: 0
@@ -44,7 +45,7 @@ fun ModifierSelectionBottomSheet(
         }
     }
 
-    val currentTotal = remember {
+    val currentTotal = remember(menuItem) {
         derivedStateOf {
             val flattenedModifiers = selectedOptions.values.flatten().map {
                 SelectedModifier("", "", it.id, it.name, it.priceDelta)
@@ -229,6 +230,12 @@ fun ModifierGroupSection(
                 if (option.priceDelta > 0.0) {
                     Text(
                         "+$${"%.2f".format(option.priceDelta)}",
+                        fontWeight = FontWeight.Medium,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                } else if (option.priceDelta < 0.0) {
+                    Text(
+                        "-$${"%.2f".format(abs(option.priceDelta))}",
                         fontWeight = FontWeight.Medium,
                         color = MaterialTheme.colorScheme.primary
                     )
