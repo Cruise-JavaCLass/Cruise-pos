@@ -18,6 +18,20 @@ data class CashDenomination(
 }
 
 @Serializable
+data class CashDropRecord(
+    val id: String,
+    val shiftId: String,
+    val amount: Double,
+    val cashierId: String,
+    val witnessId: String,
+    val receiptNumber: String,
+    val safeBalanceAfter: Double,
+    val denominations: List<CashDenomination> = emptyList(),
+    val droppedAt: String,
+    val notes: String? = null
+)
+
+@Serializable
 data class ShiftRecord(
     val id: String,
     val cashierId: Long,
@@ -28,6 +42,8 @@ data class ShiftRecord(
     val startingDenominations: List<CashDenomination> = emptyList(),
     val openedAt: String,
     val closedAt: String? = null,
+    val totalCashDrops: Double = 0.0,
+    val cashDropHistory: List<CashDropRecord> = emptyList(),
     val expectedCash: Double? = null,
     val actualCountedCash: Double? = null,
     val cashDifference: Double? = null,
@@ -49,4 +65,15 @@ data class CloseShiftRequest(
     val actualCountedCash: Double,
     val denominations: List<CashDenomination> = emptyList(),
     val closingNote: String? = null
+)
+
+@Serializable
+data class CashDropRequest(
+    val shiftId: String,
+    val amount: Double,
+    val cashierId: String,
+    val witnessId: String,
+    val witnessPin: String,
+    val denominations: List<CashDenomination> = emptyList(),
+    val notes: String? = null
 )
