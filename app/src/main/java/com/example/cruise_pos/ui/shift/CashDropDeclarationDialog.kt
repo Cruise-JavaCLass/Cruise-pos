@@ -202,7 +202,7 @@ fun CashDropDeclarationDialog(
                     modifier = Modifier.fillMaxWidth().padding(top = 4.dp)
                 )
 
-                val displayError = serverErrorMessage ?: errorMessage
+                val displayError = errorMessage ?: serverErrorMessage
                 if (displayError != null) {
                     Text(
                         text = displayError,

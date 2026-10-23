@@ -179,6 +179,9 @@ fun MainScreen(
                         notes = notes.ifBlank { null }
                     )
                     when (val result = shiftRepository.recordCashDrop(request)) {
+                        is ApiResult.Loading -> {
+                            isSubmittingDrop = true
+                        }
                         is ApiResult.Success -> {
                             currentDrawerCash -= result.data.amount
                             val noteSuffix = if (!result.data.notes.isNullOrBlank()) " Notes: ${result.data.notes}" else ""
