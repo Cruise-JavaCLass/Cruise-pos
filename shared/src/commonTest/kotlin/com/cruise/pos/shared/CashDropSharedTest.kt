@@ -94,4 +94,70 @@ class CashDropSharedTest {
         assertTrue(result is ApiResult.Error)
         assertEquals(400, (result as ApiResult.Error).code)
     }
+    @Test
+    fun testCashCalculationUtils_expectedCashNegativeDeficitPreserved() {
+        val startingFloat = 200.0
+        val cashSales = 100.0
+        val totalCashDrops = 400.0
+
+        val expected = CashCalculationUtils.calculateExpectedCash(startingFloat, cashSales, totalCashDrops)
+        assertEquals(-100.0, expected)
+
+        val discrepancy = CashCalculationUtils.calculateDiscrepancy(0.0, expected)
+        assertEquals(100.0, discrepancy)
+    }
+
+    @Test
+    fun testRecordCashDrop_rejectsNonFiniteAmount() = runTest {
+        val repo = ShiftRepositoryImpl()
+        val initialShift = ShiftRecord(
+            id = "shift-003",
+            cashierId = 42L,
+            cashierName = "Roving Bartender",
+            stationId = "STATION_POOL_BAR",
+            status = ShiftStatus.OPEN,
+            startingFloat = 200.0,
+            openedAt = "2026-10-22T08:00:00Z"
+        )
+        repo.setCurrentShift(initialShift)
+
+        val request = CashDropRequest(
+            shiftId = "shift-003",
+            amount = Double.NaN,
+            cashierId = "42",
+            witnessId = "MGR-01",
+            witnessPin = "8888"
+        )
+
+        val result = repo.recordCashDrop(request)
+        assertTrue(result is ApiResult.Error)
+        assertEquals(400, (result as ApiResult.Error).code)
+    }
+
+    @Test
+    fun testRecordCashDrop_rejectsMismatchedShiftId() = runTest {
+        val repo = ShiftRepositoryImpl()
+        val initialShift = ShiftRecord(
+            id = "shift-004",
+            cashierId = 42L,
+            cashierName = "Roving Bartender",
+            stationId = "STATION_POOL_BAR",
+            status = ShiftStatus.OPEN,
+            startingFloat = 200.0,
+            openedAt = "2026-10-22T08:00:00Z"
+        )
+        repo.setCurrentShift(initialShift)
+
+        val request = CashDropRequest(
+            shiftId = "shift-OTHER",
+            amount = 100.0,
+            cashierId = "42",
+            witnessId = "MGR-01",
+            witnessPin = "8888"
+        )
+
+        val result = repo.recordCashDrop(request)
+        assertTrue(result is ApiResult.Error)
+        assertEquals(400, (result as ApiResult.Error).code)
+    }
 }

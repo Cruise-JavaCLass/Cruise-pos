@@ -56,7 +56,7 @@ fun CashDropDeclarationDialog(
         }
     }
 
-    val remainingDrawerCash = remember {
+    val remainingDrawerCash = remember(currentDrawerCash) {
         derivedStateOf {
             (currentDrawerCash - calculatedTotal.value).coerceAtLeast(0.0)
         }
@@ -231,7 +231,7 @@ fun CashDropDeclarationDialog(
             Button(
                 onClick = {
                     val amount = calculatedTotal.value
-                    if (amount <= 0.0) {
+                    if (!amount.isFinite() || amount <= 0.0) {
                         errorMessage = "Amount must be greater than $0"
                         return@Button
                     }
