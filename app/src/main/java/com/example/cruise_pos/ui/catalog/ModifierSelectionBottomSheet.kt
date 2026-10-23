@@ -1,13 +1,15 @@
 package com.example.cruise_pos.ui.catalog
 
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.cruise.pos.shared.domain.model.*
@@ -85,78 +87,14 @@ fun ModifierSelectionBottomSheet(
                     .heightIn(max = 380.dp)
             ) {
                 items(menuItem.modifierGroups) { group ->
-                    Column(modifier = Modifier.padding(bottom = 16.dp)) {
-                        Text(
-                            text = group.name,
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.SemiBold
-                        )
-                        Spacer(modifier = Modifier.height(6.dp))
-
-                        group.options.forEach { option ->
-                            val currentSet = selectedOptions[group.id] ?: mutableSetOf()
-                            val isSelected = currentSet.any { it.id == option.id }
-
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clickable {
-                                        if (group.maxSelections == 1) {
-                                            // Single selection
-                                            selectedOptions[group.id] = mutableSetOf(option)
-                                        } else {
-                                            // Multi selection
-                                            val newSet = currentSet.toMutableSet()
-                                            if (isSelected) {
-                                                newSet.removeAll { it.id == option.id }
-                                            } else {
-                                                if (newSet.size < group.maxSelections) {
-                                                    newSet.add(option)
-                                                }
-                                            }
-                                            selectedOptions[group.id] = newSet
-                                        }
-                                    }
-                                    .padding(vertical = 6.dp),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    if (group.maxSelections == 1) {
-                                        RadioButton(
-                                            selected = isSelected,
-                                            onClick = {
-                                                selectedOptions[group.id] = mutableSetOf(option)
-                                            }
-                                        )
-                                    } else {
-                                        Checkbox(
-                                            selected = isSelected,
-                                            onCheckedChange = { checked ->
-                                                val newSet = currentSet.toMutableSet()
-                                                if (checked) {
-                                                    if (newSet.size < group.maxSelections) newSet.add(option)
-                                                } else {
-                                                    newSet.removeAll { it.id == option.id }
-                                                }
-                                                selectedOptions[group.id] = newSet
-                                            }
-                                        )
-                                    }
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                    Text(option.name, style = MaterialTheme.typography.bodyLarge)
-                                }
-
-                                if (option.priceDelta > 0.0) {
-                                    Text(
-                                        "+$${"%.2f".format(option.priceDelta)}",
-                                        fontWeight = FontWeight.Medium,
-                                        color = MaterialTheme.colorScheme.primary
-                                    )
-                                }
-                            }
+                    val currentSet = selectedOptions[group.id] ?: emptySet()
+                    ModifierGroupSection(
+                        group = group,
+                        selectedOptions = currentSet,
+                        onToggleOption = { option ->
+                            selectedOptions[group.id] = toggleOption(group, option, currentSet)
                         }
-                    }
+                    )
                 }
             }
 
@@ -223,5 +161,114 @@ fun ModifierSelectionBottomSheet(
                 }
             }
         }
+    }
+}
+
+/**
+ * Renders a single modifier group with its options and proper accessibility semantics.
+ */
+@Composable
+fun ModifierGroupSection(
+    group: ModifierGroup,
+    selectedOptions: Set<ModifierOption>,
+    onToggleOption: (ModifierOption) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val isSingleChoice = group.maxSelections == 1
+
+    Column(modifier = modifier.padding(bottom = 16.dp)) {
+        Text(
+            text = group.name,
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.SemiBold
+        )
+        Spacer(modifier = Modifier.height(6.dp))
+
+        group.options.forEach { option ->
+            val isSelected = selectedOptions.any { it.id == option.id }
+
+            val rowModifier = if (isSingleChoice) {
+                Modifier
+                    .fillMaxWidth()
+                    .selectable(
+                        selected = isSelected,
+                        role = Role.RadioButton,
+                        onClick = { onToggleOption(option) }
+                    )
+            } else {
+                Modifier
+                    .fillMaxWidth()
+                    .toggleable(
+                        value = isSelected,
+                        role = Role.Checkbox,
+                        onValueChange = { onToggleOption(option) }
+                    )
+            }
+
+            Row(
+                modifier = rowModifier.padding(vertical = 6.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (isSingleChoice) {
+                        RadioButton(
+                            selected = isSelected,
+                            onClick = null // handled by selectable row
+                        )
+                    } else {
+                        Checkbox(
+                            checked = isSelected,
+                            onCheckedChange = null // handled by toggleable row
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(option.name, style = MaterialTheme.typography.bodyLarge)
+                }
+
+                if (option.priceDelta > 0.0) {
+                    Text(
+                        "+$${"%.2f".format(option.priceDelta)}",
+                        fontWeight = FontWeight.Medium,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Consolidates modifier selection logic for both single-choice and multi-choice groups.
+ *
+ * For single-choice groups:
+ * - If minSelections is 0 and the option is already selected, unselects (clears) it.
+ * - Otherwise, selects the tapped option.
+ *
+ * For multi-choice groups:
+ * - Toggles the tapped option on/off while respecting maxSelections limit.
+ */
+internal fun toggleOption(
+    group: ModifierGroup,
+    option: ModifierOption,
+    currentSet: Set<ModifierOption>
+): MutableSet<ModifierOption> {
+    val isSingleChoice = group.maxSelections == 1
+    return if (isSingleChoice) {
+        val isAlreadySelected = currentSet.any { it.id == option.id }
+        if (group.minSelections == 0 && isAlreadySelected) {
+            mutableSetOf()
+        } else {
+            mutableSetOf(option)
+        }
+    } else {
+        val newSet = currentSet.toMutableSet()
+        val isSelected = newSet.any { it.id == option.id }
+        if (isSelected) {
+            newSet.removeAll { it.id == option.id }
+        } else if (newSet.size < group.maxSelections) {
+            newSet.add(option)
+        }
+        newSet
     }
 }
