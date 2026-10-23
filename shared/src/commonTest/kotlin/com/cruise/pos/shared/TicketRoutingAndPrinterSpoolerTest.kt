@@ -1,5 +1,6 @@
 package com.cruise.pos.shared
 
+import com.cruise.pos.shared.domain.model.ConnectionType
 import com.cruise.pos.shared.domain.model.DestinationType
 import com.cruise.pos.shared.domain.model.OrderRoutingRequest
 import com.cruise.pos.shared.domain.model.PrepStationType
@@ -25,7 +26,7 @@ class TicketRoutingAndPrinterSpoolerTest {
     private val engine = TicketRoutingEngine()
 
     private class MockPrinterClient(
-        private val failingHosts: Set<String> = emptySet(),
+        var failingHosts: Set<String> = emptySet(),
         var throwTimeoutOn: Set<String> = emptySet()
     ) : EscPosNetworkPrinterClient {
         val printedPayloads = mutableListOf<Triple<String, Int, ByteArray>>()
@@ -57,6 +58,25 @@ class TicketRoutingAndPrinterSpoolerTest {
         assertEquals(DestinationType.GALLEY, engine.determineDestination("hot_entrees"))
         assertEquals(DestinationType.GALLEY, engine.determineDestination("cold_appetizers"))
         assertEquals(DestinationType.GALLEY, engine.determineDestination("pastry_desserts"))
+    }
+
+    @Test
+    fun testCategoryWholeTokenMatchingRegression() {
+        // "tea" in "steak_entrees" must NOT route to BAR
+        assertEquals(DestinationType.GALLEY, engine.determineDestination("steak_entrees"))
+        assertEquals(PrepStationType.HOT_LINE, engine.resolvePrepStation("steak_entrees", null))
+
+        // "bar" in "barbecue_grill" must NOT route to BAR
+        assertEquals(DestinationType.GALLEY, engine.determineDestination("barbecue_grill"))
+        assertEquals(PrepStationType.HOT_LINE, engine.resolvePrepStation("barbecue_grill", null))
+
+        // "raw" in "strawberry_desserts" must NOT route to COLD_LINE
+        assertEquals(DestinationType.GALLEY, engine.determineDestination("strawberry_desserts"))
+        assertEquals(PrepStationType.DESSERT, engine.resolvePrepStation("strawberry_desserts", null))
+
+        // "coffee_tea" must consistently route to BAR for both destination and station
+        assertEquals(DestinationType.BAR, engine.determineDestination("coffee_tea"))
+        assertEquals(PrepStationType.BAR, engine.resolvePrepStation("coffee_tea", null))
     }
 
     @Test
@@ -131,6 +151,26 @@ class TicketRoutingAndPrinterSpoolerTest {
     }
 
     @Test
+    fun testTicketIdIncludesDestination() {
+        val routed = engine.routeOrder(
+            OrderRoutingRequest(
+                orderId = "ORD-DEST",
+                terminalStationId = "T1",
+                serverName = "Alice",
+                timestampMillis = 1000L,
+                items = listOf(
+                    TicketLineItem("1", "Steak", "hot_entrees", prepStation = PrepStationType.HOT_LINE),
+                    TicketLineItem("2", "Beer", "bar_beverages", prepStation = PrepStationType.BAR)
+                )
+            )
+        )
+        val galleyTicket = routed.galleyTickets.first()
+        val barTicket = routed.barTickets.first()
+        assertEquals("ORD-DEST-galley-hot_line", galleyTicket.ticketId)
+        assertEquals("ORD-DEST-bar-bar", barTicket.ticketId)
+    }
+
+    @Test
     fun testEmptyOrderThrowsException() {
         val request = OrderRoutingRequest(
             orderId = "ORD-EMPTY",
@@ -192,7 +232,7 @@ class TicketRoutingAndPrinterSpoolerTest {
                 terminalStationId = "T1",
                 serverName = "Alice",
                 timestampMillis = 1000L,
-                items = listOf(TicketLineItem("1", "Burger", "entree"))
+                items = listOf(TicketLineItem("1", "Burger", "hot_entrees"))
             )
         ).galleyTickets.first()
 
@@ -217,7 +257,7 @@ class TicketRoutingAndPrinterSpoolerTest {
                 terminalStationId = "T1",
                 serverName = "Bob",
                 timestampMillis = 2000L,
-                items = listOf(TicketLineItem("1", "Ribs", "entree"))
+                items = listOf(TicketLineItem("1", "Ribs", "hot_entrees"))
             )
         ).galleyTickets.first()
 
@@ -238,7 +278,8 @@ class TicketRoutingAndPrinterSpoolerTest {
         val backup = PrinterEndpoint("p-backup", "Backup Net", DestinationType.GALLEY, PrepStationType.HOT_LINE, "192.168.1.51")
 
         val client = MockPrinterClient(failingHosts = setOf("192.168.1.50", "192.168.1.51"))
-        val spooler = PrinterSpoolerQueue(client, MapSettings())
+        val sharedSettings = MapSettings()
+        val spooler = PrinterSpoolerQueue(client, sharedSettings)
 
         val ticket = engine.routeOrder(
             OrderRoutingRequest(
@@ -246,7 +287,7 @@ class TicketRoutingAndPrinterSpoolerTest {
                 terminalStationId = "T1",
                 serverName = "Charlie",
                 timestampMillis = 3000L,
-                items = listOf(TicketLineItem("1", "Soup", "entree"))
+                items = listOf(TicketLineItem("1", "Soup", "hot_entrees"))
             )
         ).galleyTickets.first()
 
@@ -255,10 +296,132 @@ class TicketRoutingAndPrinterSpoolerTest {
         assertEquals(0, client.printedPayloads.size)
         assertEquals(1, spooler.alerts.value.size)
 
-        // Simulate network restored
-        val restoredClient = MockPrinterClient()
-        val retrySpooler = PrinterSpoolerQueue(restoredClient, MapSettings())
-        val retryJob = retrySpooler.enqueueAndDispatch(ticket, primary, backup, currentTimeMillis = 3500L)
-        assertEquals(SpoolJobStatus.SENT_TO_PRIMARY, retryJob.status)
+        // 1. Test retry with backup printer: primary remains failing, backup is restored
+        client.failingHosts = setOf("192.168.1.50") // 1.51 is healthy now
+        val retryBackupJobs = spooler.retryPendingJobs(currentTimeMillis = 3500L)
+        assertEquals(1, retryBackupJobs.size)
+        val backupSuccessJob = retryBackupJobs.first()
+        assertEquals(SpoolJobStatus.FAILED_OVER_TO_BACKUP, backupSuccessJob.status)
+        assertEquals(2, backupSuccessJob.attempts)
+        assertEquals(1, client.printedPayloads.size)
+        assertEquals("192.168.1.51", client.printedPayloads.first().first)
+
+        // 2. Test restore from shared settings and retry primary success on another ticket
+        val ticket2 = engine.routeOrder(
+            OrderRoutingRequest(
+                orderId = "ORD-4",
+                terminalStationId = "T1",
+                serverName = "Charlie",
+                timestampMillis = 4000L,
+                items = listOf(TicketLineItem("2", "Salad", "cold_appetizers"))
+            )
+        ).galleyTickets.first()
+
+        client.failingHosts = setOf("192.168.1.50", "192.168.1.51")
+        val job2 = spooler.enqueueAndDispatch(ticket2, primary, backup, currentTimeMillis = 4000L)
+        assertEquals(SpoolJobStatus.ALERT_TRIGGERED, job2.status)
+
+        client.failingHosts = emptySet()
+        val restoredSpooler = PrinterSpoolerQueue(client, sharedSettings)
+        val retriedRestored = restoredSpooler.retryPendingJobs(currentTimeMillis = 4500L)
+        assertEquals(1, retriedRestored.size)
+        assertEquals(SpoolJobStatus.SENT_TO_PRIMARY, retriedRestored.first().status)
+        assertEquals(2, retriedRestored.first().attempts)
+    }
+
+    @Test
+    fun testExhaustingMaxAttemptsEndsInFailedWithAlert() = runTest {
+        val primary = PrinterEndpoint("p-hot", "Hot Net", DestinationType.GALLEY, PrepStationType.HOT_LINE, "192.168.1.50")
+        val client = MockPrinterClient(failingHosts = setOf("192.168.1.50"))
+        val spooler = PrinterSpoolerQueue(client, MapSettings())
+
+        val ticket = engine.routeOrder(
+            OrderRoutingRequest(
+                orderId = "ORD-FAIL",
+                terminalStationId = "T1",
+                serverName = "Charlie",
+                timestampMillis = 5000L,
+                items = listOf(TicketLineItem("1", "Fish", "hot_entrees"))
+            )
+        ).galleyTickets.first()
+
+        val job = spooler.enqueueAndDispatch(ticket, primary, currentTimeMillis = 5000L)
+        assertEquals(SpoolJobStatus.ALERT_TRIGGERED, job.status)
+        assertEquals(1, job.attempts)
+
+        // Retry 1: attempts becomes 2, maxAttempts is 3 -> still ALERT_TRIGGERED
+        val retry1 = spooler.retryPendingJobs(currentTimeMillis = 5100L)
+        assertEquals(1, retry1.size)
+        assertEquals(2, retry1.first().attempts)
+        assertEquals(SpoolJobStatus.ALERT_TRIGGERED, retry1.first().status)
+
+        // Retry 2: attempts becomes 3 >= 3 -> FAILED with offline alert
+        val retry2 = spooler.retryPendingJobs(currentTimeMillis = 5200L)
+        assertEquals(1, retry2.size)
+        assertEquals(3, retry2.first().attempts)
+        assertEquals(SpoolJobStatus.FAILED, retry2.first().status)
+        assertTrue(spooler.alerts.value.any { it.affectedJobId == job.jobId })
+    }
+
+    @Test
+    fun testDistinctJobsForTicketsSharingTimestamp() = runTest {
+        val primary = PrinterEndpoint("p-hot", "Hot Net", DestinationType.GALLEY, PrepStationType.HOT_LINE, "192.168.1.50")
+        val client = MockPrinterClient()
+        val spooler = PrinterSpoolerQueue(client, MapSettings())
+
+        val ticket1 = engine.routeOrder(
+            OrderRoutingRequest(
+                orderId = "ORD-SAME-TIME-1",
+                terminalStationId = "T1",
+                serverName = "Alice",
+                timestampMillis = 1000L,
+                items = listOf(TicketLineItem("1", "Burger", "hot_entrees"))
+            )
+        ).galleyTickets.first()
+
+        val ticket2 = engine.routeOrder(
+            OrderRoutingRequest(
+                orderId = "ORD-SAME-TIME-2",
+                terminalStationId = "T1",
+                serverName = "Bob",
+                timestampMillis = 1000L,
+                items = listOf(TicketLineItem("2", "Fries", "hot_entrees"))
+            )
+        ).galleyTickets.first()
+
+        val job1 = spooler.enqueueAndDispatch(ticket1, primary, currentTimeMillis = 1000L)
+        val job2 = spooler.enqueueAndDispatch(ticket2, primary, currentTimeMillis = 1000L)
+
+        assertTrue(job1.jobId.isNotEmpty())
+        assertTrue(job2.jobId.isNotEmpty())
+        assertTrue(job1.jobId != job2.jobId, "Job IDs must be distinct despite identical timestamps")
+    }
+
+    @Test
+    fun testRejectBleEndpointsBeforeEnqueue() = runTest {
+        val client = MockPrinterClient()
+        val spooler = PrinterSpoolerQueue(client, MapSettings())
+        val blePrinter = PrinterEndpoint(
+            id = "ble-1",
+            name = "Mobile BLE",
+            destination = DestinationType.GALLEY,
+            stationType = PrepStationType.HOT_LINE,
+            host = "",
+            connectionType = ConnectionType.BLE,
+            macAddress = "AA:BB:CC:DD:EE:FF"
+        )
+        val ticket = engine.routeOrder(
+            OrderRoutingRequest(
+                orderId = "ORD-BLE",
+                terminalStationId = "T1",
+                serverName = "Alice",
+                timestampMillis = 1000L,
+                items = listOf(TicketLineItem("1", "Burger", "hot_entrees"))
+            )
+        ).galleyTickets.first()
+
+        assertFailsWith<IllegalArgumentException> {
+            spooler.enqueueAndDispatch(ticket, blePrinter)
+        }
     }
 }

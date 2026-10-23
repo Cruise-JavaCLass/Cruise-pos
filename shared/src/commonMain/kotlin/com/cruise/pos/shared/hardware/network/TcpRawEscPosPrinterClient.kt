@@ -6,7 +6,9 @@ import io.ktor.network.sockets.aSocket
 import io.ktor.network.sockets.openWriteChannel
 import io.ktor.utils.io.ByteWriteChannel
 import io.ktor.utils.io.writeFully
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 
@@ -45,7 +47,16 @@ class TcpRawEscPosPrinterClient(
                 host = host,
                 port = port
             )
-        } catch (t: Throwable) {
+        } catch (e: TimeoutCancellationException) {
+            PrintResult.Failure(
+                host = host,
+                port = port,
+                reason = "TCP socket connection/write timed out after ${effectiveTimeout}ms",
+                cause = e
+            )
+        } catch (e: CancellationException) {
+            throw e
+        } catch (t: Exception) {
             PrintResult.Failure(
                 host = host,
                 port = port,
@@ -53,8 +64,8 @@ class TcpRawEscPosPrinterClient(
                 cause = t
             )
         } finally {
-            try { socket?.close() } catch (_: Throwable) {}
-            try { selector?.close() } catch (_: Throwable) {}
+            try { socket?.close() } catch (_: Exception) {}
+            try { selector?.close() } catch (_: Exception) {}
         }
     }
 }

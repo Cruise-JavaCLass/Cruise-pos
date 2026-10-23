@@ -13,18 +13,11 @@ class TicketRoutingEngine(
 ) {
 
     fun determineDestination(categoryId: String): DestinationType {
-        val normalized = categoryId.trim().lowercase()
-        return when {
-            normalized.contains("bar") ||
-            normalized.contains("cocktail") ||
-            normalized.contains("wine") ||
-            normalized.contains("beer") ||
-            normalized.contains("beverage") ||
-            normalized.contains("drink") ||
-            normalized.contains("coffee") ||
-            normalized.contains("tea") -> DestinationType.BAR
-
-            else -> DestinationType.GALLEY
+        val tokens = extractCategoryTokens(categoryId)
+        return if (tokens.any { it in BAR_KEYWORDS }) {
+            DestinationType.BAR
+        } else {
+            DestinationType.GALLEY
         }
     }
 
@@ -32,25 +25,11 @@ class TicketRoutingEngine(
         if (assignedStation != null && assignedStation != PrepStationType.HOT_LINE) {
             return assignedStation
         }
-        val normalized = categoryId.trim().lowercase()
+        val tokens = extractCategoryTokens(categoryId)
         return when {
-            normalized.contains("bar") ||
-            normalized.contains("drink") ||
-            normalized.contains("beverage") ||
-            normalized.contains("wine") ||
-            normalized.contains("cocktail") -> PrepStationType.BAR
-
-            normalized.contains("cold") ||
-            normalized.contains("salad") ||
-            normalized.contains("sushi") ||
-            normalized.contains("raw") ||
-            normalized.contains("appetizer") -> PrepStationType.COLD_LINE
-
-            normalized.contains("dessert") ||
-            normalized.contains("bakery") ||
-            normalized.contains("pastry") ||
-            normalized.contains("ice_cream") -> PrepStationType.DESSERT
-
+            tokens.any { it in BAR_KEYWORDS } -> PrepStationType.BAR
+            tokens.any { it in COLD_LINE_KEYWORDS } -> PrepStationType.COLD_LINE
+            tokens.any { it in DESSERT_KEYWORDS } -> PrepStationType.DESSERT
             else -> PrepStationType.HOT_LINE
         }
     }
@@ -101,7 +80,7 @@ class TicketRoutingEngine(
         return stationGroups.map { (stationType, groupedItems) ->
             val targetPrinter = selectPrinterFor(destination, stationType)
             PreparedTicket(
-                ticketId = "${orderId}-${stationType.name.lowercase()}",
+                ticketId = "${orderId}-${destination.name.lowercase()}-${stationType.name.lowercase()}",
                 orderId = orderId,
                 destination = destination,
                 stationType = stationType,
@@ -128,6 +107,26 @@ class TicketRoutingEngine(
     }
 
     companion object {
+        private val BAR_KEYWORDS = setOf(
+            "bar", "cocktail", "cocktails", "wine", "wines",
+            "beer", "beers", "beverage", "beverages",
+            "drink", "drinks", "coffee", "tea"
+        )
+
+        private val COLD_LINE_KEYWORDS = setOf(
+            "cold", "salad", "salads", "sushi", "raw", "appetizer", "appetizers"
+        )
+
+        private val DESSERT_KEYWORDS = setOf(
+            "dessert", "desserts", "bakery", "pastry", "pastries", "ice_cream", "icecream"
+        )
+
+        private fun extractCategoryTokens(categoryId: String): Set<String> {
+            val normalized = categoryId.trim().lowercase()
+            val words = normalized.split(Regex("[\\s_/-]+")).filter { it.isNotBlank() }
+            return (words + normalized).toSet()
+        }
+
         fun defaultShipPrinters(): List<PrinterEndpoint> = listOf(
             PrinterEndpoint(
                 id = "printer-galley-hot",
