@@ -53,6 +53,8 @@ fun MainScreen(
     var showCashDropDialog by remember { mutableStateOf(false) }
     var dropResult by remember { mutableStateOf<String?>(null) }
     var currentDrawerCash by remember { mutableStateOf(1450.00) }
+    var isSubmittingDrop by remember { mutableStateOf(false) }
+    var dropErrorMessage by remember { mutableStateOf<String?>(null) }
     val coroutineScope = rememberCoroutineScope()
 
     val activeShift = remember {
@@ -160,7 +162,12 @@ fun MainScreen(
         CashDropDeclarationDialog(
             shift = activeShift,
             currentDrawerCash = currentDrawerCash,
+            isSubmitting = isSubmittingDrop,
+            serverErrorMessage = dropErrorMessage,
             onConfirmDrop = { amount, witnessId, witnessPin, denoms, notes ->
+                if (isSubmittingDrop) return@CashDropDeclarationDialog
+                isSubmittingDrop = true
+                dropErrorMessage = null
                 coroutineScope.launch {
                     val request = CashDropRequest(
                         shiftId = activeShift.id,
@@ -175,15 +182,24 @@ fun MainScreen(
                         is ApiResult.Success -> {
                             currentDrawerCash -= amount
                             dropResult = "Transferred $${"%.2f".format(amount)} to Ship Safe (Receipt: ${result.data.receiptNumber}, Witness: $witnessId). Notes: $notes"
+                            isSubmittingDrop = false
+                            dropErrorMessage = null
                             showCashDropDialog = false
                         }
                         is ApiResult.Error -> {
+                            dropErrorMessage = result.message
                             // Do not report completion or deduct drawer cash on failure
+                            isSubmittingDrop = false
                         }
                     }
                 }
             },
-            onDismiss = { showCashDropDialog = false }
+            onDismiss = {
+                if (!isSubmittingDrop) {
+                    dropErrorMessage = null
+                    showCashDropDialog = false
+                }
+            }
         )
     }
 

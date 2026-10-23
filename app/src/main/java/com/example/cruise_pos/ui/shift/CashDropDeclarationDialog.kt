@@ -34,6 +34,8 @@ fun CashDropDeclarationDialog(
         denominations: List<CashDenomination>,
         notes: String
     ) -> Unit,
+    isSubmitting: Boolean = false,
+    serverErrorMessage: String? = null,
     onDismiss: () -> Unit
 ) {
     val standardDenoms = CashCalculationUtils.STANDARD_USD_DENOMINATIONS
@@ -200,9 +202,10 @@ fun CashDropDeclarationDialog(
                     modifier = Modifier.fillMaxWidth().padding(top = 4.dp)
                 )
 
-                if (errorMessage != null) {
+                val displayError = serverErrorMessage ?: errorMessage
+                if (displayError != null) {
                     Text(
-                        text = errorMessage!!,
+                        text = displayError,
                         color = MaterialTheme.colorScheme.error,
                         style = MaterialTheme.typography.bodySmall,
                         modifier = Modifier.padding(top = 4.dp)
@@ -229,9 +232,10 @@ fun CashDropDeclarationDialog(
         },
         confirmButton = {
             Button(
+                enabled = !isSubmitting,
                 onClick = {
                     val amount = calculatedTotal.value
-                    if (!amount.isFinite() || amount <= 0.0) {
+                    if (!amount.isFinite() || amount <= 0.0 || kotlin.math.round(amount * 100.0) / 100.0 != amount) {
                         errorMessage = "Amount must be greater than $0"
                         return@Button
                     }
@@ -253,7 +257,11 @@ fun CashDropDeclarationDialog(
                     onConfirmDrop(amount, witnessId.trim(), witnessPin.trim(), denoms, notes.trim())
                 }
             ) {
-                Text("Confirm Safe Drop")
+                if (isSubmitting) {
+                    CircularProgressIndicator(modifier = Modifier.size(18.dp), color = MaterialTheme.colorScheme.onPrimary, strokeWidth = 2.dp)
+                } else {
+                    Text("Confirm Safe Drop")
+                }
             }
         },
         dismissButton = {

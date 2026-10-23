@@ -25,7 +25,8 @@ interface ShiftRepository {
 
 class ShiftRepositoryImpl(
     private val httpClient: HttpClient? = null,
-    private val baseUrl: String = "https://cruise-pos-api.internal"
+    private val baseUrl: String = "https://cruise-pos-api.internal",
+    private val clock: Clock = Clock.System
 ) : ShiftRepository {
 
     private val _currentShift = MutableStateFlow<ShiftRecord?>(null)
@@ -164,6 +165,14 @@ class ShiftRepositoryImpl(
             return ApiResult.Error(code = 400, message = "Cash drop amount must be greater than zero")
         }
 
+        if (request.witnessId == request.cashierId) {
+            return ApiResult.Error(code = 403, message = "Witness ID cannot match cashier ID")
+        }
+
+        if (request.witnessPin.isBlank() || request.witnessPin.length < 4) {
+            return ApiResult.Error(code = 403, message = "Valid witness PIN authorization is required")
+        }
+
         if (httpClient != null) {
             return try {
                 val response = httpClient.post("$baseUrl/api/v1/pos/shifts/${request.shiftId}/cash-drop") {
@@ -191,7 +200,7 @@ class ShiftRepositoryImpl(
         }
 
         // Local simulation / Offline mode
-        val nowIso = Clock.System.now().toString()
+        val nowIso = clock.now().toString()
         val dropRecord = CashDropRecord(
             id = "drop-${shift.id}-${shift.cashDropHistory.size + 1}",
             shiftId = shift.id,
@@ -215,8 +224,8 @@ class ShiftRepositoryImpl(
     private fun updateLocalShiftWithDrop(drop: CashDropRecord): Boolean {
         var applied = false
         _currentShift.update { current ->
-            if (current != null && current.id == drop.shiftId) {
-                applied = true
+            applied = current != null && current.id == drop.shiftId
+            if (current != null && applied) {
                 current.copy(
                     totalCashDrops = current.totalCashDrops + drop.amount,
                     cashDropHistory = current.cashDropHistory + drop

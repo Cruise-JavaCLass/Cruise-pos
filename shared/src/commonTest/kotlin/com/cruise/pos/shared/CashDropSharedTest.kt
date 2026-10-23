@@ -160,4 +160,57 @@ class CashDropSharedTest {
         assertTrue(result is ApiResult.Error)
         assertEquals(400, (result as ApiResult.Error).code)
     }
+    @Test
+    fun testRecordCashDrop_rejectsMatchingWitnessAndCashier() = runTest {
+        val repo = ShiftRepositoryImpl()
+        val initialShift = ShiftRecord(
+            id = "shift-005",
+            cashierId = 42L,
+            cashierName = "Roving Bartender",
+            stationId = "STATION_POOL_BAR",
+            status = ShiftStatus.OPEN,
+            startingFloat = 200.0,
+            openedAt = "2026-10-22T08:00:00Z"
+        )
+        repo.setCurrentShift(initialShift)
+
+        val request = CashDropRequest(
+            shiftId = "shift-005",
+            amount = 100.0,
+            cashierId = "42",
+            witnessId = "42",
+            witnessPin = "8888"
+        )
+
+        val result = repo.recordCashDrop(request)
+        assertTrue(result is ApiResult.Error)
+        assertEquals(403, (result as ApiResult.Error).code)
+    }
+
+    @Test
+    fun testRecordCashDrop_rejectsInvalidWitnessPin() = runTest {
+        val repo = ShiftRepositoryImpl()
+        val initialShift = ShiftRecord(
+            id = "shift-006",
+            cashierId = 42L,
+            cashierName = "Roving Bartender",
+            stationId = "STATION_POOL_BAR",
+            status = ShiftStatus.OPEN,
+            startingFloat = 200.0,
+            openedAt = "2026-10-22T08:00:00Z"
+        )
+        repo.setCurrentShift(initialShift)
+
+        val request = CashDropRequest(
+            shiftId = "shift-006",
+            amount = 100.0,
+            cashierId = "42",
+            witnessId = "MGR-02",
+            witnessPin = "12"
+        )
+
+        val result = repo.recordCashDrop(request)
+        assertTrue(result is ApiResult.Error)
+        assertEquals(403, (result as ApiResult.Error).code)
+    }
 }
