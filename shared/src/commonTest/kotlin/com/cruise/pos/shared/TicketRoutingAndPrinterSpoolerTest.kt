@@ -110,6 +110,32 @@ class TicketRoutingAndPrinterSpoolerTest {
     }
 
     @Test
+    fun testExplicitDessertStationOnBarCategoryRoutesToGalleyDessertPrinter() {
+        val request = OrderRoutingRequest(
+            orderId = "ORD-DESSERT-AFFOGATO",
+            terminalStationId = "T1",
+            serverName = "Bob",
+            timestampMillis = 1000L,
+            items = listOf(
+                TicketLineItem(
+                    itemId = "item-affogato",
+                    name = "Espresso Affogato",
+                    categoryId = "coffee_desserts",
+                    quantity = 1,
+                    prepStation = PrepStationType.DESSERT
+                )
+            )
+        )
+        val routed = engine.routeOrder(request)
+        assertEquals(1, routed.galleyTickets.size)
+        assertEquals(0, routed.barTickets.size)
+        val galleyTicket = routed.galleyTickets.first()
+        assertEquals(DestinationType.GALLEY, galleyTicket.destination)
+        assertEquals(PrepStationType.DESSERT, galleyTicket.stationType)
+        assertEquals("printer-galley-dessert", galleyTicket.targetPrinterId)
+    }
+
+    @Test
     fun testPrepStationResolution() {
         assertEquals(PrepStationType.HOT_LINE, engine.resolvePrepStation("entrees", PrepStationType.HOT_LINE))
         assertEquals(PrepStationType.COLD_LINE, engine.resolvePrepStation("salad_raw", null))

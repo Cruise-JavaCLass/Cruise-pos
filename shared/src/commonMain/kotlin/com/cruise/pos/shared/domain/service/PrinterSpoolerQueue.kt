@@ -237,21 +237,23 @@ class PrinterSpoolerQueue(
         }
 
         // 3. Reacquire lock to persist and trigger alert if primary failed
-        mutex.withLock {
-            if (outcome.status == SpoolJobStatus.FAILED_OVER_TO_BACKUP ||
-                outcome.status == SpoolJobStatus.ALERT_TRIGGERED ||
-                outcome.status == SpoolJobStatus.FAILED
-            ) {
-                val primaryError = outcome.lastError ?: "Primary printer offline"
-                triggerOfflineAlertUnderLock(
-                    printer = primaryPrinter,
-                    reason = primaryError,
-                    jobId = initialJob.jobId,
-                    timestamp = currentTimeMillis,
-                    isTerminal = (outcome.status == SpoolJobStatus.FAILED)
-                )
+        withContext(NonCancellable) {
+            mutex.withLock {
+                if (outcome.status == SpoolJobStatus.FAILED_OVER_TO_BACKUP ||
+                    outcome.status == SpoolJobStatus.ALERT_TRIGGERED ||
+                    outcome.status == SpoolJobStatus.FAILED
+                ) {
+                    val primaryError = outcome.lastError ?: "Primary printer offline"
+                    triggerOfflineAlertUnderLock(
+                        printer = primaryPrinter,
+                        reason = primaryError,
+                        jobId = initialJob.jobId,
+                        timestamp = currentTimeMillis,
+                        isTerminal = (outcome.status == SpoolJobStatus.FAILED)
+                    )
+                }
+                updateJobUnderLock(outcome)
             }
-            updateJobUnderLock(outcome)
         }
         return outcome
     }
@@ -310,22 +312,24 @@ class PrinterSpoolerQueue(
         }
 
         // 3. Reacquire lock to apply results, persist, and trigger alerts if FAILED
-        return mutex.withLock {
-            val finalUpdated = mutableListOf<SpooledPrintJob>()
-            for (outcome in dispatchOutcomes) {
-                if (outcome.status == SpoolJobStatus.FAILED) {
-                    triggerOfflineAlertUnderLock(
-                        printer = outcome.targetPrinter,
-                        reason = outcome.lastError ?: "Max retry attempts reached",
-                        jobId = outcome.jobId,
-                        timestamp = currentTimeMillis,
-                        isTerminal = true
-                    )
+        return withContext(NonCancellable) {
+            mutex.withLock {
+                val finalUpdated = mutableListOf<SpooledPrintJob>()
+                for (outcome in dispatchOutcomes) {
+                    if (outcome.status == SpoolJobStatus.FAILED) {
+                        triggerOfflineAlertUnderLock(
+                            printer = outcome.targetPrinter,
+                            reason = outcome.lastError ?: "Max retry attempts reached",
+                            jobId = outcome.jobId,
+                            timestamp = currentTimeMillis,
+                            isTerminal = true
+                        )
+                    }
+                    updateJobUnderLock(outcome)
+                    finalUpdated.add(outcome)
                 }
-                updateJobUnderLock(outcome)
-                finalUpdated.add(outcome)
+                finalUpdated
             }
-            finalUpdated
         }
     }
 

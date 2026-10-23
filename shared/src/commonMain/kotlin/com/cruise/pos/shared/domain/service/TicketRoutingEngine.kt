@@ -39,11 +39,7 @@ class TicketRoutingEngine(
 
         val partitionedByDestination = request.items.groupBy { item ->
             val resolvedStation = resolvePrepStation(item.categoryId, item.prepStation)
-            if (resolvedStation == PrepStationType.BAR) {
-                DestinationType.BAR
-            } else {
-                determineDestination(item.categoryId)
-            }
+            if (resolvedStation == PrepStationType.BAR) DestinationType.BAR else DestinationType.GALLEY
         }
 
         val galleyItems = partitionedByDestination[DestinationType.GALLEY].orEmpty()
