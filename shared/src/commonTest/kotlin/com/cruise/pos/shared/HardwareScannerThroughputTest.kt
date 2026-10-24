@@ -42,7 +42,11 @@ class HardwareScannerThroughputTest {
         val eventDeferred = async(UnconfinedTestDispatcher(testScheduler)) { scannerEngine.scanEvents.first() }
         val processed = scannerEngine.processRawBroadcastIntent(
             action = UnifiedHardwareScannerEngine.SUNMI_ACTION_SCAN,
-            extrasMap = mapOf("data" to "CRUISE-GUEST-100234\n", "source_byte" to "QR_CODE")
+            extrasMap = mapOf(
+                "data" to "CRUISE-GUEST-100234\n",
+                "source_byte" to "CRUISE-GUEST-100234\n".encodeToByteArray(),
+                "barcode_type" to "QR_CODE"
+            )
         )
 
         assertTrue(processed)
@@ -91,20 +95,40 @@ class HardwareScannerThroughputTest {
 
     @Test
     fun duplicateCooldown_dropsDuplicateScansWithinWindow() = runTest {
-        val p1 = scannerEngine.processRawBroadcastIntent(
+        var simulatedTime = 1000L
+        val timedFeedback = MockHardwareFeedbackController()
+        val timedEngine = UnifiedHardwareScannerEngine(
+            initialConfig = HardwareScannerConfig(
+                enabledDeviceType = ScannerDeviceType.SUNMI_BUILTIN_LASER,
+                duplicateScanCooldownMillis = 100L
+            ),
+            feedbackController = timedFeedback,
+            currentTimeMillisProvider = { simulatedTime }
+        )
+
+        val p1 = timedEngine.processRawBroadcastIntent(
             action = UnifiedHardwareScannerEngine.SUNMI_ACTION_SCAN,
             extrasMap = mapOf("data" to "DUPLICATE-CHECK-1")
         )
         assertTrue(p1)
-        val initialBeepCount = feedbackController.beepCount
+        val initialBeepCount = timedFeedback.beepCount
 
         // Immediate identical scan should be suppressed by duplicate cooldown window
-        val p2 = scannerEngine.processRawBroadcastIntent(
+        val p2 = timedEngine.processRawBroadcastIntent(
             action = UnifiedHardwareScannerEngine.SUNMI_ACTION_SCAN,
             extrasMap = mapOf("data" to "DUPLICATE-CHECK-1")
         )
         assertTrue(p2)
-        assertEquals(initialBeepCount, feedbackController.beepCount)
+        assertEquals(initialBeepCount, timedFeedback.beepCount)
+
+        // After cooldown window has elapsed, identical scan is permitted
+        simulatedTime += 200L
+        val p3 = timedEngine.processRawBroadcastIntent(
+            action = UnifiedHardwareScannerEngine.SUNMI_ACTION_SCAN,
+            extrasMap = mapOf("data" to "DUPLICATE-CHECK-1")
+        )
+        assertTrue(p3)
+        assertEquals(initialBeepCount + 1, timedFeedback.beepCount)
     }
 
     @Test
