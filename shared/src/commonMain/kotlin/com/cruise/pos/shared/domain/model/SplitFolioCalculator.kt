@@ -1,6 +1,6 @@
 package com.cruise.pos.shared.domain.model
 
-import kotlin.math.round
+import kotlin.math.floor
 
 object SplitFolioCalculator {
 
@@ -12,6 +12,18 @@ object SplitFolioCalculator {
         order: MultiGuestSplitOrder
     ): List<GuestSplitChargeBreakdown> {
         if (order.guestAssignments.isEmpty()) return emptyList()
+
+        val originalItemIds = order.originalItems.map { it.id }.toSet()
+        val allAssignedIds = order.guestAssignments.flatMap { it.assignedItemIds }
+
+        require(order.guestAssignments.all { it.customTipAmount >= 0.0 }) {
+            "Custom tip amount must be non-negative"
+        }
+
+        val unknownItemIds = allAssignedIds.toSet() - originalItemIds
+        require(unknownItemIds.isEmpty()) {
+            "Assigned items contain unknown item IDs: $unknownItemIds"
+        }
 
         // Map item subtotals
         val itemSubtotalMap = order.originalItems.associate { it.id to it.itemSubtotal }
@@ -113,6 +125,8 @@ object SplitFolioCalculator {
     }
 
     private fun roundToCents(amount: Double): Double {
-        return round(amount * 100.0) / 100.0
+        if (amount.isNaN() || amount.isInfinite()) return 0.0
+        val cents = floor(amount * 100.0 + 0.5).toLong()
+        return cents / 100.0
     }
 }

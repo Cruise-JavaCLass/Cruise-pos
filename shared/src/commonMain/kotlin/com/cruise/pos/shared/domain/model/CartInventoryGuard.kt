@@ -27,6 +27,9 @@ class CartInventoryGuard(
      */
     suspend fun validateCartBeforeTender(items: List<CartItem>): CartInventoryValidationResult {
         val issues = mutableListOf<CartItemValidationIssue>()
+        val totalQuantityByMenuItemId = items.groupBy { it.menuItem.id }
+            .mapValues { (_, itemList) -> itemList.sumOf { it.quantity } }
+        val handledMenuItemIds = mutableSetOf<String>()
 
         for (item in items) {
             val freshItem = inventoryRepository.getItemById(item.menuItem.id)
@@ -41,17 +44,20 @@ class CartInventoryGuard(
                         reason = "Item has been 86'd (Sold Out) by the kitchen"
                     )
                 )
-            } else if (freshItem.stockQuota != null && freshItem.stockQuota < item.quantity) {
-                issues.add(
-                    CartItemValidationIssue(
-                        cartItemId = item.id,
-                        menuItemId = item.menuItem.id,
-                        menuItemName = item.menuItem.name,
-                        requestedQuantity = item.quantity,
-                        remainingStock = freshItem.stockQuota,
-                        reason = "Requested ${item.quantity} units, but only ${freshItem.stockQuota} remain in stock"
+            } else {
+                val totalRequested = totalQuantityByMenuItemId[item.menuItem.id] ?: item.quantity
+                if (freshItem.stockQuota != null && freshItem.stockQuota < totalRequested && handledMenuItemIds.add(item.menuItem.id)) {
+                    issues.add(
+                        CartItemValidationIssue(
+                            cartItemId = item.id,
+                            menuItemId = item.menuItem.id,
+                            menuItemName = item.menuItem.name,
+                            requestedQuantity = totalRequested,
+                            remainingStock = freshItem.stockQuota,
+                            reason = "Requested $totalRequested units, but only ${freshItem.stockQuota} remain in stock"
+                        )
                     )
-                )
+                }
             }
         }
 

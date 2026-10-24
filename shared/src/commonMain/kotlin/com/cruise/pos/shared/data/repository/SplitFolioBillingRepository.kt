@@ -47,10 +47,11 @@ class SplitFolioBillingRepository {
         orderId: String,
         breakdowns: List<GuestSplitChargeBreakdown>,
         signatureMap: Map<String, String>,
-        timestampEpochMs: Long = 1774268000000L
+        timestampEpochMs: Long
     ): BatchCabinChargeSubmission {
         val chargeRequests = breakdowns.map { item ->
-            val sig = signatureMap[item.guestId] ?: "sig_${item.guestId}"
+            val sig = signatureMap[item.guestId]
+                ?: throw IllegalArgumentException("Missing required signature for guest ${item.guestId}")
             val idempotencyKey = "IDEMP-SPLIT-$orderId-${item.folioId}"
             CabinChargeRequest(
                 idempotencyKey = idempotencyKey,
@@ -72,12 +73,20 @@ class SplitFolioBillingRepository {
     suspend fun submitBatchCabinCharges(
         submission: BatchCabinChargeSubmission
     ): BatchCabinChargeResult {
-        // Enforce validations
         if (submission.charges.isEmpty()) {
             return BatchCabinChargeResult.PartialFailure(
                 batchOrderId = submission.batchOrderId,
                 failedGuestFolios = emptyList(),
                 errorMessage = "No charges to process"
+            )
+        }
+
+        val invalidCharges = submission.charges.filter { it.amount <= 0.0 || it.signatureSvg.isBlank() || it.folioId.isBlank() }
+        if (invalidCharges.isNotEmpty()) {
+            return BatchCabinChargeResult.PartialFailure(
+                batchOrderId = submission.batchOrderId,
+                failedGuestFolios = invalidCharges.map { it.folioId },
+                errorMessage = "Invalid charges detected: amounts must be positive and signatures non-empty"
             )
         }
 

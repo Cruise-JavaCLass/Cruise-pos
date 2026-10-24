@@ -44,7 +44,7 @@ class Realtime86AndConcurrencyTest {
         val repository = InventoryCatalogRepository(
             eventClient = sseClient,
             initialItems = listOf(specialSteak, houseWine),
-            scope = this
+            scope = backgroundScope
         )
 
         // Initial state
@@ -79,7 +79,7 @@ class Realtime86AndConcurrencyTest {
         val repository = InventoryCatalogRepository(
             eventClient = sseClient,
             initialItems = listOf(specialSteak),
-            scope = this
+            scope = backgroundScope
         )
         val guard = CartInventoryGuard(repository)
 
@@ -118,7 +118,7 @@ class Realtime86AndConcurrencyTest {
         val repository = InventoryCatalogRepository(
             eventClient = sseClient,
             initialItems = listOf(specialSteak.copy(stockQuota = 5)),
-            scope = this
+            scope = backgroundScope
         )
 
         // 10 concurrent requests trying to claim 1 unit each when only 5 units exist

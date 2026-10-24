@@ -94,7 +94,7 @@ fun SequentialGuestTenderDialog(
                             Text("$${"%.2f".format(currentGuest.taxAmount)}", style = MaterialTheme.typography.bodySmall)
                         }
                         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                            Text("18% Gratuity", style = MaterialTheme.typography.bodySmall)
+                            Text("Gratuity", style = MaterialTheme.typography.bodySmall)
                             Text("$${"%.2f".format(currentGuest.gratuityAmount)}", style = MaterialTheme.typography.bodySmall)
                         }
                         Divider(modifier = Modifier.padding(vertical = 4.dp))
@@ -194,7 +194,7 @@ fun SequentialGuestTenderDialog(
                         Spacer(modifier = Modifier.height(6.dp))
 
                         OutlinedButton(
-                            onClick = { onSignCaptured("svg_sig_guest_${currentGuest.guestId}") },
+                            onClick = { onSignCaptured("sig_${currentGuest.guestId}_${currentGuest.folioId}") },
                             enabled = isCardTapped && !isSignatureCaptured,
                             modifier = Modifier
                                 .fillMaxWidth()

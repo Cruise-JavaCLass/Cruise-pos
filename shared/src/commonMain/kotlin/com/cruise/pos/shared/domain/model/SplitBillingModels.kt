@@ -8,7 +8,7 @@ data class GuestFolioProfile(
     val guestName: String,
     val cabinNumber: String,
     val folioId: String,
-    val cardLast4: String = "1234"
+    val cardLast4: String? = null
 )
 
 @Serializable
