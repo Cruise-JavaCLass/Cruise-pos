@@ -67,7 +67,26 @@ class EscPosCommandGenerator {
     }
 
     fun text(text: String): EscPosCommandGenerator {
-        val bytes = text.encodeToByteArray()
+        val sanitized = text.map { ch ->
+            when (ch) {
+                'é', 'è', 'ê', 'ë' -> 'e'
+                'É', 'È', 'Ê', 'Ë' -> 'E'
+                'á', 'à', 'â', 'ä', 'ã', 'å' -> 'a'
+                'Á', 'À', 'Â', 'Ä', 'Ã', 'Å' -> 'A'
+                'í', 'ì', 'î', 'ï' -> 'i'
+                'Í', 'Ì', 'Î', 'Ï' -> 'I'
+                'ó', 'ò', 'ô', 'ö', 'õ' -> 'o'
+                'Ó', 'Ò', 'Ô', 'Ö', 'Õ' -> 'O'
+                'ú', 'ù', 'û', 'ü' -> 'u'
+                'Ú', 'Ù', 'Û', 'Ü' -> 'U'
+                'ñ' -> 'n'
+                'Ñ' -> 'N'
+                'ç' -> 'c'
+                'Ç' -> 'C'
+                else -> if (ch.code in 32..126 || ch == '\n' || ch == '\r' || ch == '\t') ch else '?'
+            }
+        }.joinToString("")
+        val bytes = sanitized.encodeToByteArray()
         buffer.addAll(bytes.toList())
         return this
     }
@@ -98,12 +117,12 @@ class EscPosCommandGenerator {
         val spaceNeeded = maxChars - left.length - right.length
         if (spaceNeeded > 0) {
             textLine(left + " ".repeat(spaceNeeded) + right)
-        } else if (right.length >= maxChars) {
+        } else if (right.isEmpty()) {
             textLine(left)
-            textLine(right)
         } else {
-            val maxLeft = (maxChars - right.length - 1).coerceAtLeast(0)
-            textLine(left.take(maxLeft) + " " + right)
+            textLine(left)
+            val rightPadding = (maxChars - right.length).coerceAtLeast(0)
+            textLine(" ".repeat(rightPadding) + right)
         }
         return this
     }

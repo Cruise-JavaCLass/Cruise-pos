@@ -81,17 +81,24 @@ class ReceiptBitmapRenderer {
         }
 
         for (stroke in strokes) {
-            for (i in 0 until stroke.size - 1) {
-                val p1 = stroke[i]
-                val p2 = stroke[i + 1]
-                drawLine(
-                    grid,
-                    x0 = mapX(p1.first),
-                    y0 = mapY(p1.second),
-                    x1 = mapX(p2.first),
-                    y1 = mapY(p2.second),
-                    thickness = strokeThickness
-                )
+            if (stroke.size == 1) {
+                val p = stroke[0]
+                val x = mapX(p.first)
+                val y = mapY(p.second)
+                drawLine(grid, x0 = x, y0 = y, x1 = x, y1 = y, thickness = strokeThickness)
+            } else {
+                for (i in 0 until stroke.size - 1) {
+                    val p1 = stroke[i]
+                    val p2 = stroke[i + 1]
+                    drawLine(
+                        grid,
+                        x0 = mapX(p1.first),
+                        y0 = mapY(p1.second),
+                        x1 = mapX(p2.first),
+                        y1 = mapY(p2.second),
+                        thickness = strokeThickness
+                    )
+                }
             }
         }
 

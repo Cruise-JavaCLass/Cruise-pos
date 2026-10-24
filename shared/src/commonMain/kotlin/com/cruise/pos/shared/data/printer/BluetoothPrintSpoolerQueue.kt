@@ -11,6 +11,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withTimeout
 
 class BluetoothPrintSpoolerQueue(
     private val socketProvider: () -> BluetoothSocketConnection?
@@ -84,7 +85,9 @@ class BluetoothPrintSpoolerQueue(
         _printerStatus.value = PrinterDeviceStatus.PRINTING
 
         val written = try {
-            socket.write(job.payload)
+            withTimeout(15_000L) {
+                socket.write(job.payload)
+            }
         } catch (e: Exception) {
             _activeJob.value = null
             _failedJobs.value = _failedJobs.value + job.copy(
@@ -92,16 +95,14 @@ class BluetoothPrintSpoolerQueue(
                 errorMessage = "Write failed: ${e.message}"
             )
             _printerStatus.value = PrinterDeviceStatus.ERROR
-            if (e is kotlinx.coroutines.CancellationException) {
+            if (e is kotlinx.coroutines.CancellationException && e !is kotlinx.coroutines.TimeoutCancellationException) {
                 throw e
             }
             return PrintJobResult.HardwareError(job.id, PrinterDeviceStatus.ERROR)
         }
         return if (written) {
             _activeJob.value = null
-            if (_printerStatus.value == PrinterDeviceStatus.PRINTING) {
-                _printerStatus.value = PrinterDeviceStatus.READY
-            }
+            _printerStatus.compareAndSet(PrinterDeviceStatus.PRINTING, PrinterDeviceStatus.READY)
             PrintJobResult.Success(job.id)
         } else {
             handleFailedJob(job, "Socket write failed", PrintJobStatus.FAILED)
@@ -118,18 +119,16 @@ class BluetoothPrintSpoolerQueue(
                 pendingQueue.removeFirst()
             }
             pendingQueue.addFirst(job.copy(retryCount = updatedRetry, status = PrintJobStatus.RETRYING, errorMessage = reason))
+            _queueSize.value = pendingQueue.size
         } else {
-            // Push to failed list
             if (pendingQueue.isNotEmpty() && pendingQueue.first().id == job.id) {
                 pendingQueue.removeFirst()
             }
+            _queueSize.value = pendingQueue.size
             _failedJobs.value = _failedJobs.value + job.copy(
                 status = PrintJobStatus.FAILED,
-                retryCount = updatedRetry,
                 errorMessage = reason
             )
         }
-        _queueSize.value = pendingQueue.size
-        _activeJob.value = null
     }
 }
