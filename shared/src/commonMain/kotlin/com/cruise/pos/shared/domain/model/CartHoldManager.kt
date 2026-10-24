@@ -1,9 +1,11 @@
 package com.cruise.pos.shared.domain.model
 
 class CartHoldManager(
-    private val maxHeldTabs: Int = 20
+    private val maxHeldTabs: Int = 20,
+    private val clock: () -> Long = { 0L }
 ) {
     private val heldTabs = mutableMapOf<String, CartHoldTab>()
+    private var sequence = 0L
 
     fun getHeldTabs(): List<CartHoldTab> {
         return heldTabs.values.sortedByDescending { it.createdAtEpochMs }
@@ -13,15 +15,18 @@ class CartHoldManager(
         guestIdentifier: String,
         items: List<CartItem>,
         note: String = "",
-        timestampEpochMs: Long = System.currentTimeMillis(),
-        tabId: String = "TAB-${timestampEpochMs.toString().takeLast(6)}"
+        timestampEpochMs: Long = clock(),
+        tabId: String? = null
     ): CartHoldTab {
         require(items.isNotEmpty()) { "Cannot hold an empty cart" }
         require(guestIdentifier.isNotBlank()) { "Guest identifier is required to park an order" }
         check(heldTabs.size < maxHeldTabs) { "Maximum hold capacity reached ($maxHeldTabs tabs)" }
 
+        val resolvedTabId = tabId ?: "TAB-$timestampEpochMs-${++sequence}"
+        require(resolvedTabId !in heldTabs) { "Tab id already in use: $resolvedTabId" }
+
         val tab = CartHoldTab(
-            tabId = tabId,
+            tabId = resolvedTabId,
             guestIdentifier = guestIdentifier.trim(),
             items = items,
             createdAtEpochMs = timestampEpochMs,

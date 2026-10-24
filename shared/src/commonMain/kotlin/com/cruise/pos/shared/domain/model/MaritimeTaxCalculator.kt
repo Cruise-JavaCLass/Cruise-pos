@@ -49,6 +49,6 @@ object MaritimeTaxCalculator {
     }
 
     private fun roundToCents(value: Double): Double {
-        return round(value * 100.0) / 100.0
+        return kotlin.math.floor(value * 100.0 + 0.5) / 100.0
     }
 }
