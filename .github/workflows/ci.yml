@@ -18,6 +18,9 @@ jobs:
   build-and-test:
     name: Build & Test Android POS & KMP Shared
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
     timeout-minutes: 25
 
     steps:
