@@ -30,12 +30,12 @@ data class GuestIdentity(
     val cardStatus: CardStatus = CardStatus.ACTIVE,
     val folioBalance: Double = 0.0,
     val creditLimit: Double = 500.0,
-    val availableSpendingLimit: Double = (creditLimit - folioBalance).coerceAtLeast(0.0),
-    val isAlcoholRestricted: Boolean = age < 18,
     val packageTier: String = "STANDARD",
     val isAllergyWarning: Boolean = false,
     val allergyNotes: String? = null
 ) {
+    val availableSpendingLimit: Double get() = (creditLimit - folioBalance).coerceAtLeast(0.0)
+    val isAlcoholRestricted: Boolean get() = age < 18
     val isMinor: Boolean get() = age < 18 || passengerType == PassengerType.MINOR
     val canChargeFolio: Boolean get() = cardStatus == CardStatus.ACTIVE && availableSpendingLimit > 0.0
 }

@@ -119,12 +119,20 @@ class GuestCardRecognitionService(
         }
 
         // Alcohol lock for minors (< 18)
-        if (containsAlcohol && guest.isMinor) {
+        if (containsAlcohol && (guest.isMinor || guest.isAlcoholRestricted)) {
             return PurchaseAuthorizationResult(
                 isAuthorized = false,
                 guest = guest,
                 isAlcoholBlocked = true,
-                rejectionReason = "ALCOHOL RESTRICTION: Guest is minor (${guest.age} y/o). Underage alcohol purchase prohibited."
+                rejectionReason = "ALCOHOL RESTRICTION: Guest is not permitted to buy alcohol (${guest.age} y/o)."
+            )
+        }
+
+        if (!purchaseAmount.isFinite() || purchaseAmount <= 0.0) {
+            return PurchaseAuthorizationResult(
+                isAuthorized = false,
+                guest = guest,
+                rejectionReason = "INVALID AMOUNT: Purchase amount must be a positive number"
             )
         }
 

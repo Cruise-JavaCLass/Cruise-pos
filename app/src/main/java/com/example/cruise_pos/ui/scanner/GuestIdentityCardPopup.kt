@@ -1,6 +1,8 @@
 package com.example.cruise_pos.ui.scanner
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
@@ -36,6 +38,7 @@ fun GuestIdentityCardPopup(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
+                .verticalScroll(rememberScrollState())
                 .padding(20.dp)
         ) {
             // Header: Card Status & Dismiss
@@ -140,7 +143,7 @@ fun GuestIdentityCardPopup(
                                 fontWeight = FontWeight.Bold
                             )
                             Text(
-                                text = "Alcohol purchase locked by Maritime SOLAS & Ship Policy",
+                                text = "Alcohol purchase restricted by Ship Policy and age verification",
                                 color = Color(0xFFFBBF24),
                                 fontSize = 11.sp
                             )
