@@ -56,6 +56,20 @@ class CatalogFilteringAndPricingTest {
     }
 
     @Test
+    fun testStockQuotaBoundaries() {
+        fun withQuota(q: Int?) = sampleItems[0].copy(stockQuota = q)
+
+        assertTrue(withQuota(0).is86ed)
+        assertTrue(withQuota(-1).is86ed)
+        assertFalse(withQuota(1).is86ed)
+        assertTrue(withQuota(1).isLowStock)
+        assertTrue(withQuota(5).isLowStock)
+        assertFalse(withQuota(6).isLowStock)
+        assertFalse(withQuota(null).isLowStock)
+        assertFalse(sampleItems[1].copy(stockQuota = 3).isLowStock)
+    }
+
+    @Test
     fun testFilterByCategory() {
         val cocktails = CatalogFilterUtils.filterItems(sampleItems, "COCKTAILS", "")
         assertEquals(2, cocktails.size)
