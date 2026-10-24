@@ -7,8 +7,9 @@ enum class PaymentMethodType {
     CASH,
     CREDIT_CARD,
     CABIN_FOLIO,
-    PACKAGE_ALLOWANCE,
-    COMPLIMENTARY
+    ROOM_CHARGE,
+    COUPON,
+    VOUCHER
 }
 
 @Serializable
@@ -36,7 +37,7 @@ data class ShiftXReport(
     val openedAtMillis: Long,
     val generatedAtMillis: Long,
     val startingCashFloat: Double,
-    val totalCashDrops: Double = 0.0,
+    val totalCashDrops: Double,
     val paymentBreakdowns: List<PaymentMethodBreakdown>,
     val totalGrossSales: Double = paymentBreakdowns.sumOf { it.grossSales },
     val totalRefunds: Double = paymentBreakdowns.sumOf { it.refunds },
@@ -44,7 +45,9 @@ data class ShiftXReport(
     val totalOrdersCount: Int = paymentBreakdowns.sumOf { it.transactionCount }
 ) {
     val cashSales: Double
-        get() = paymentBreakdowns.firstOrNull { it.method == PaymentMethodType.CASH }?.netSales ?: 0.0
+        get() = paymentBreakdowns
+            .filter { it.method == PaymentMethodType.CASH }
+            .sumOf { it.netSales }
 
     val expectedCashInDrawer: Double
         get() = startingCashFloat + cashSales - totalCashDrops
@@ -68,17 +71,17 @@ data class ShiftZReport(
     val closedAtMillis: Long,
     val startingCashFloat: Double,
     val totalCashDrops: Double,
-    val paymentBreakdowns: List<PaymentMethodBreakdown>,
+    val expectedCashInDrawer: Double,
+    val countedCashAmount: Double,
+    val cashDiscrepancy: Double,
+    val isBalanced: Boolean,
+    val isOverShortApproved: Boolean,
+    val supervisorOverridePin: String? = null,
     val totalNetRevenue: Double,
     val totalOrdersCount: Int,
-    val expectedCashInDrawer: Double,
-    val actualCountedCash: Double,
-    val cashDiscrepancy: Double = actualCountedCash - expectedCashInDrawer, // Negative = Shortage, Positive = Over
-    val isOverShortApproved: Boolean = false,
-    val supervisorOverridePin: String? = null,
+    val paymentBreakdowns: List<PaymentMethodBreakdown>,
     val backendLedgerSyncStatus: LedgerSyncStatus = LedgerSyncStatus.PENDING
 ) {
-    val isBalanced: Boolean get() = kotlin.math.abs(cashDiscrepancy) < 0.01
-
-    val requiresSupervisorApproval: Boolean get() = kotlin.math.abs(cashDiscrepancy) > 10.0
+    val requiresSupervisorApproval: Boolean
+        get() = kotlin.math.abs(cashDiscrepancy) > 10.0 && !isOverShortApproved
 }

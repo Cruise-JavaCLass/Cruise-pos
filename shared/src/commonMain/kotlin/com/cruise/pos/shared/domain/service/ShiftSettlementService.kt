@@ -12,8 +12,15 @@ interface BackendAccountingLedgerClient {
 }
 
 class ShiftSettlementService(
-    private val accountingClient: BackendAccountingLedgerClient = MockBackendAccountingLedgerClient()
+    private val accountingClient: BackendAccountingLedgerClient = MockBackendAccountingLedgerClient(),
+    private val clock: () -> Long = { System.currentTimeMillis() }
 ) {
+
+    private fun formatMoney(value: Double): String {
+        val cents = kotlin.math.round(kotlin.math.abs(value) * 100.0).toLong()
+        val sign = if (value < 0.0 && cents != 0L) "-" else ""
+        return "$sign${cents / 100}.${(cents % 100).toString().padStart(2, '0')}"
+    }
 
     /**
      * Generates mid-shift interim X-Report without closing the shift.
@@ -29,7 +36,7 @@ class ShiftSettlementService(
         paymentBreakdowns: List<PaymentMethodBreakdown>,
         currentTimestampMillis: Long = 0L
     ): ShiftXReport {
-        val actualTimestamp = if (currentTimestampMillis > 0L) currentTimestampMillis else 1774268000000L
+        val actualTimestamp = if (currentTimestampMillis > 0L) currentTimestampMillis else clock()
         return ShiftXReport(
             shiftId = shiftId,
             stationId = stationId,
@@ -55,7 +62,7 @@ class ShiftSettlementService(
         require(blindDrop.countedCashAmount.isFinite() && blindDrop.countedCashAmount >= 0.0) {
             "Counted cash amount must be a finite, non-negative number"
         }
-        val actualClosedAt = if (closedAtMillis > 0L) closedAtMillis else 1774268000000L
+        val actualClosedAt = if (closedAtMillis > 0L) closedAtMillis else clock()
         val discrepancy = blindDrop.countedCashAmount - xReport.expectedCashInDrawer
         val requiresApproval = kotlin.math.abs(discrepancy) > 10.0 // > $10 discrepancy requires manager signoff
 
@@ -73,8 +80,9 @@ class ShiftSettlementService(
             totalNetRevenue = xReport.totalNetRevenue,
             totalOrdersCount = xReport.totalOrdersCount,
             expectedCashInDrawer = xReport.expectedCashInDrawer,
-            actualCountedCash = blindDrop.countedCashAmount,
+            countedCashAmount = blindDrop.countedCashAmount,
             cashDiscrepancy = discrepancy,
+            isBalanced = kotlin.math.abs(discrepancy) <= 0.009,
             isOverShortApproved = !requiresApproval || !supervisorPin.isNullOrBlank(),
             supervisorOverridePin = supervisorPin
         )
@@ -104,18 +112,18 @@ class ShiftSettlementService(
         for (pb in zReport.paymentBreakdowns) {
             val name = pb.method.name.padEnd(20)
             val countStr = "(${pb.transactionCount})".padStart(6)
-            val amountStr = "$${"%.2f".format(pb.netSales)}".padStart(12)
+            val amountStr = "$${formatMoney(pb.netSales)}".padStart(12)
             sb.append("$name $countStr $amountStr\n")
         }
 
         sb.append(sep)
-        sb.append("TOTAL NET REVENUE: $${"%.2f".format(zReport.totalNetRevenue)}\n")
+        sb.append("TOTAL NET REVENUE: $${formatMoney(zReport.totalNetRevenue)}\n")
         sb.append(sep)
         sb.append("CASH DRAWER RECONCILIATION (BLIND DROP):\n")
-        sb.append("Starting Cash Float : $${"%.2f".format(zReport.startingCashFloat)}\n")
-        sb.append("Mid-Shift Cash Drops: -$${"%.2f".format(zReport.totalCashDrops)}\n")
-        sb.append("Expected In Drawer  : $${"%.2f".format(zReport.expectedCashInDrawer)}\n")
-        sb.append("Actual Counted Cash : $${"%.2f".format(zReport.actualCountedCash)}\n")
+        sb.append("Starting Cash Float : $${formatMoney(zReport.startingCashFloat)}\n")
+        sb.append("Mid-Shift Cash Drops: -$${formatMoney(zReport.totalCashDrops)}\n")
+        sb.append("Expected In Drawer  : $${formatMoney(zReport.expectedCashInDrawer)}\n")
+        sb.append("Actual Counted Cash : $${formatMoney(zReport.countedCashAmount)}\n")
 
         val disc = zReport.cashDiscrepancy
         val discLabel = when {
@@ -123,7 +131,7 @@ class ShiftSettlementService(
             disc < -0.009 -> "SHORTAGE (-)"
             else -> "BALANCED (0.00)"
         }
-        sb.append("Discrepancy Status  : $discLabel ($${"%.2f".format(disc)})\n")
+        sb.append("Discrepancy Status  : $discLabel ($${formatMoney(disc)})\n")
         sb.append(dsep)
         sb.append("Cashier Signature: _______________________\n\n")
         sb.append("Manager Signature: _______________________\n")
@@ -138,7 +146,7 @@ class ShiftSettlementService(
         val text = renderSettlementReceiptText(zReport)
         val init = byteArrayOf(0x1B, 0x40) // ESC @
         val cut = byteArrayOf(0x1D, 0x56, 0x41, 0x03) // GS V 65 3
-        return init + text.toByteArray(Charsets.UTF_8) + cut
+        return init + text.encodeToByteArray() + cut
     }
 
     /**

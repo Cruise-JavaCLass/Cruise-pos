@@ -139,4 +139,24 @@ class ShiftSettlementAndReconciliationTest {
         val failed = service.transmitToAccountingLedger(zReport)
         assertEquals(LedgerSyncStatus.FAILED_RETRY, failed.backendLedgerSyncStatus)
     }
+
+    @Test
+    fun testMultipleCashPaymentBreakdownsAreSummedInCashSales() {
+        val breakdowns = listOf(
+            PaymentMethodBreakdown(PaymentMethodType.CASH, transactionCount = 5, grossSales = 100.0, refunds = 0.0),
+            PaymentMethodBreakdown(PaymentMethodType.CASH, transactionCount = 3, grossSales = 50.0, refunds = 10.0)
+        )
+        val xReport = service.generateXReport(
+            shiftId = "SHIFT-09",
+            stationId = "STATION-01",
+            cashierId = "USR-01",
+            cashierName = "Cashier",
+            openedAtMillis = 1000L,
+            startingCashFloat = 100.0,
+            totalCashDrops = 0.0,
+            paymentBreakdowns = breakdowns
+        )
+        assertEquals(140.0, xReport.cashSales)
+        assertEquals(240.0, xReport.expectedCashInDrawer)
+    }
 }
