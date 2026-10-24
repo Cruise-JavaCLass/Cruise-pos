@@ -28,7 +28,8 @@ class AdaptiveNetworkSyncEngine(
     val networkState: StateFlow<NetworkQualitySnapshot> = _networkState.asStateFlow()
 
     /**
-     * Determines health tier based on measured roundtrip latency, RSSI signal, and bandwidth.
+     * Determines health tier based on measured roundtrip latency, RSSI signal, bandwidth, and packet loss.
+     * Note: packetLossPercent is represented as a fraction between 0.0f (0%) and 1.0f (100%).
      */
     fun evaluateHealthTier(
         latencyMillis: Long,
@@ -36,15 +37,15 @@ class AdaptiveNetworkSyncEngine(
         bandwidthKbps: Int,
         packetLossPercent: Float
     ): NetworkHealthTier {
-        if (packetLossPercent >= 1.0f || latencyMillis >= 5000L || rssiDbm <= -95) {
+        if (packetLossPercent >= 0.50f || latencyMillis >= 5000L || rssiDbm <= -95) {
             return NetworkHealthTier.OFFLINE_DEAD_ZONE
         }
 
         return when {
-            latencyMillis <= 120L && bandwidthKbps >= 500 && rssiDbm >= -70 -> {
+            latencyMillis <= 120L && bandwidthKbps >= 500 && rssiDbm >= -70 && packetLossPercent < 0.02f -> {
                 NetworkHealthTier.EXCELLENT_5GHZ_DECK
             }
-            latencyMillis <= 800L && bandwidthKbps >= 50 && rssiDbm >= -85 -> {
+            latencyMillis <= 800L && bandwidthKbps >= 50 && rssiDbm >= -85 && packetLossPercent < 0.10f -> {
                 NetworkHealthTier.DEGRADED_SATELLITE
             }
             else -> {
@@ -75,24 +76,26 @@ class AdaptiveNetworkSyncEngine(
             null
         }
 
+        val edgeHost = discoveredEdge?.let { "${it.host}:${it.port}" }
         val activeGateway = when {
             discoveredEdge != null -> SyncGatewayType.SHIP_EDGE_MESH_GATEWAY
             tier == NetworkHealthTier.OFFLINE_DEAD_ZONE -> SyncGatewayType.LOCAL_OFFLINE_STORAGE
             else -> SyncGatewayType.CLOUD_SHORE_PRIMARY
         }
 
-        _networkState.value = NetworkQualitySnapshot(
+        val snapshot = NetworkQualitySnapshot(
             tier = tier,
             latencyMillis = latencyMillis,
             rssiDbm = rssiDbm,
             estimatedBandwidthKbps = bandwidthKbps,
             packetLossPercent = packetLossPercent,
             activeGatewayType = activeGateway,
-            edgeGatewayHost = discoveredEdge?.host,
+            edgeGatewayHost = edgeHost,
             timestampMillis = timestampMillis
         )
+        _networkState.value = snapshot
 
-        return computeSyncPolicy(_networkState.value, discoveredEdge)
+        return computeSyncPolicy(snapshot, discoveredEdge)
     }
 
     /**
@@ -102,6 +105,9 @@ class AdaptiveNetworkSyncEngine(
         snapshot: NetworkQualitySnapshot,
         edgeGateway: DiscoveredEdgeGateway? = null
     ): AdaptiveSyncPolicy {
+        val targetHost = edgeGateway?.let { "${it.host}:${it.port}" } ?: snapshot.edgeGatewayHost
+        val hasEdgeGateway = edgeGateway != null || snapshot.activeGatewayType == SyncGatewayType.SHIP_EDGE_MESH_GATEWAY || !snapshot.edgeGatewayHost.isNullOrBlank()
+
         return when (snapshot.tier) {
             NetworkHealthTier.EXCELLENT_5GHZ_DECK -> {
                 AdaptiveSyncPolicy(
@@ -120,13 +126,13 @@ class AdaptiveNetworkSyncEngine(
                 )
             }
             NetworkHealthTier.HIGH_LATENCY_SAT -> {
-                if (edgeGateway != null) {
+                if (hasEdgeGateway) {
                     AdaptiveSyncPolicy(
                         syncBatchSize = 30,
                         syncIntervalMillis = 5000L,
                         compressionMode = SyncCompressionMode.GZIP_COMPRESSED,
                         gatewayType = SyncGatewayType.SHIP_EDGE_MESH_GATEWAY,
-                        targetGatewayHost = "${edgeGateway.host}:${edgeGateway.port}"
+                        targetGatewayHost = targetHost
                     )
                 } else {
                     AdaptiveSyncPolicy(
@@ -138,13 +144,13 @@ class AdaptiveNetworkSyncEngine(
                 }
             }
             NetworkHealthTier.OFFLINE_DEAD_ZONE -> {
-                if (edgeGateway != null) {
+                if (hasEdgeGateway) {
                     AdaptiveSyncPolicy(
                         syncBatchSize = 25,
                         syncIntervalMillis = 5000L,
                         compressionMode = SyncCompressionMode.GZIP_COMPRESSED,
                         gatewayType = SyncGatewayType.SHIP_EDGE_MESH_GATEWAY,
-                        targetGatewayHost = "${edgeGateway.host}:${edgeGateway.port}"
+                        targetGatewayHost = targetHost
                     )
                 } else {
                     AdaptiveSyncPolicy(

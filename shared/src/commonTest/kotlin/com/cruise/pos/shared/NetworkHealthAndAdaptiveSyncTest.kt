@@ -27,6 +27,15 @@ class NetworkHealthAndAdaptiveSyncTest {
         )
         assertEquals(NetworkHealthTier.EXCELLENT_5GHZ_DECK, tierExcellent)
 
+        // Severe partial packet loss (0.99f) must not select EXCELLENT_5GHZ_DECK even with low latency
+        val tierSevereLoss = engine.evaluateHealthTier(
+            latencyMillis = 50L,
+            rssiDbm = -55,
+            bandwidthKbps = 3000,
+            packetLossPercent = 0.99f
+        )
+        assertEquals(NetworkHealthTier.OFFLINE_DEAD_ZONE, tierSevereLoss)
+
         // Degraded Satellite link
         val tierDegraded = engine.evaluateHealthTier(
             latencyMillis = 450L,
@@ -140,6 +149,12 @@ class NetworkHealthAndAdaptiveSyncTest {
         assertEquals("192.168.10.5:8443", edgeMeshPolicy.targetGatewayHost)
         assertEquals(25, edgeMeshPolicy.syncBatchSize)
         assertEquals(SyncCompressionMode.GZIP_COMPRESSED, edgeMeshPolicy.compressionMode)
+
+        // Derived policy without passing edgeGateway argument directly preserves edge gateway
+        val derivedPolicy = engine.computeSyncPolicy(engine.networkState.value)
+        assertEquals(SyncGatewayType.SHIP_EDGE_MESH_GATEWAY, derivedPolicy.gatewayType)
+        assertEquals("192.168.10.5:8443", derivedPolicy.targetGatewayHost)
+        assertEquals(25, derivedPolicy.syncBatchSize)
     }
 
     @Test

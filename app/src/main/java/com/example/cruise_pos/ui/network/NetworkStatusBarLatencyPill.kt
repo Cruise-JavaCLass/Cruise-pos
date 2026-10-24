@@ -22,6 +22,41 @@ import com.cruise.pos.shared.domain.model.NetworkHealthTier
 import com.cruise.pos.shared.domain.model.NetworkQualitySnapshot
 import com.cruise.pos.shared.domain.model.SyncGatewayType
 
+internal fun resolvePillBgColor(tier: NetworkHealthTier): Color = when (tier) {
+    NetworkHealthTier.EXCELLENT_5GHZ_DECK -> Color(0xFF065F46) // Green
+    NetworkHealthTier.DEGRADED_SATELLITE -> Color(0xFF854D0E)  // Yellow/Amber
+    NetworkHealthTier.HIGH_LATENCY_SAT -> Color(0xFF9A3412)    // Orange
+    NetworkHealthTier.OFFLINE_DEAD_ZONE -> Color(0xFF991B1B)   // Red
+}
+
+internal fun resolveDotColor(tier: NetworkHealthTier): Color = when (tier) {
+    NetworkHealthTier.EXCELLENT_5GHZ_DECK -> Color(0xFF34D399)
+    NetworkHealthTier.DEGRADED_SATELLITE -> Color(0xFFFBBF24)
+    NetworkHealthTier.HIGH_LATENCY_SAT -> Color(0xFFFB923C)
+    NetworkHealthTier.OFFLINE_DEAD_ZONE -> Color(0xFFF87171)
+}
+
+internal fun resolveLabelText(snapshot: NetworkQualitySnapshot): String = when (snapshot.tier) {
+    NetworkHealthTier.EXCELLENT_5GHZ_DECK -> "${snapshot.latencyMillis}ms • 5GHz"
+    NetworkHealthTier.DEGRADED_SATELLITE -> "${snapshot.latencyMillis}ms • SAT"
+    NetworkHealthTier.HIGH_LATENCY_SAT -> when (snapshot.activeGatewayType) {
+        SyncGatewayType.SHIP_EDGE_MESH_GATEWAY -> "EDGE MESH • ${snapshot.edgeGatewayHost ?: "LOCAL"}"
+        else -> "${snapshot.latencyMillis}ms • SLOW SAT"
+    }
+    NetworkHealthTier.OFFLINE_DEAD_ZONE -> when (snapshot.activeGatewayType) {
+        SyncGatewayType.SHIP_EDGE_MESH_GATEWAY -> "EDGE MESH • ${snapshot.edgeGatewayHost ?: "LOCAL"}"
+        else -> "OFFLINE • DEAD ZONE"
+    }
+}
+
+internal fun resolveBarsFilled(snapshot: NetworkQualitySnapshot): Int = when {
+    snapshot.tier == NetworkHealthTier.OFFLINE_DEAD_ZONE && snapshot.activeGatewayType != SyncGatewayType.SHIP_EDGE_MESH_GATEWAY -> 0
+    snapshot.rssiDbm >= -65 -> 3
+    snapshot.rssiDbm >= -78 -> 2
+    snapshot.rssiDbm >= -90 -> 1
+    else -> 0
+}
+
 @Composable
 fun NetworkStatusBarLatencyPill(
     snapshot: NetworkQualitySnapshot,
@@ -29,37 +64,17 @@ fun NetworkStatusBarLatencyPill(
     onPillClick: (() -> Unit)? = null
 ) {
     val pillBgColor by animateColorAsState(
-        targetValue = when (snapshot.tier) {
-            NetworkHealthTier.EXCELLENT_5GHZ_DECK -> Color(0xFF065F46) // Green
-            NetworkHealthTier.DEGRADED_SATELLITE -> Color(0xFF854D0E)  // Yellow/Amber
-            NetworkHealthTier.HIGH_LATENCY_SAT -> Color(0xFF9A3412)    // Orange
-            NetworkHealthTier.OFFLINE_DEAD_ZONE -> Color(0xFF991B1B)   // Red
-        },
+        targetValue = resolvePillBgColor(snapshot.tier),
         label = "pill_color"
     )
 
     val dotColor by animateColorAsState(
-        targetValue = when (snapshot.tier) {
-            NetworkHealthTier.EXCELLENT_5GHZ_DECK -> Color(0xFF34D399)
-            NetworkHealthTier.DEGRADED_SATELLITE -> Color(0xFFFBBF24)
-            NetworkHealthTier.HIGH_LATENCY_SAT -> Color(0xFFFB923C)
-            NetworkHealthTier.OFFLINE_DEAD_ZONE -> Color(0xFFF87171)
-        },
+        targetValue = resolveDotColor(snapshot.tier),
         label = "dot_color"
     )
 
-    val labelText = when (snapshot.tier) {
-        NetworkHealthTier.EXCELLENT_5GHZ_DECK -> "${snapshot.latencyMillis}ms • 5GHz"
-        NetworkHealthTier.DEGRADED_SATELLITE -> "${snapshot.latencyMillis}ms • SAT"
-        NetworkHealthTier.HIGH_LATENCY_SAT -> when (snapshot.activeGatewayType) {
-            SyncGatewayType.SHIP_EDGE_MESH_GATEWAY -> "EDGE MESH • ${snapshot.edgeGatewayHost ?: "LOCAL"}"
-            else -> "${snapshot.latencyMillis}ms • SLOW SAT"
-        }
-        NetworkHealthTier.OFFLINE_DEAD_ZONE -> when (snapshot.activeGatewayType) {
-            SyncGatewayType.SHIP_EDGE_MESH_GATEWAY -> "EDGE MESH • ${snapshot.edgeGatewayHost ?: "LOCAL"}"
-            else -> "OFFLINE • DEAD ZONE"
-        }
-    }
+    val labelText = resolveLabelText(snapshot)
+    val barsFilled = resolveBarsFilled(snapshot)
 
     Surface(
         color = pillBgColor,
@@ -90,14 +105,6 @@ fun NetworkStatusBarLatencyPill(
                 horizontalArrangement = Arrangement.spacedBy(2.dp),
                 modifier = Modifier.height(10.dp)
             ) {
-                val barsFilled = when {
-                    snapshot.tier == NetworkHealthTier.OFFLINE_DEAD_ZONE && snapshot.activeGatewayType != SyncGatewayType.SHIP_EDGE_MESH_GATEWAY -> 0
-                    snapshot.rssiDbm >= -65 -> 3
-                    snapshot.rssiDbm >= -78 -> 2
-                    snapshot.rssiDbm >= -90 -> 1
-                    else -> 0
-                }
-
                 Box(
                     modifier = Modifier
                         .width(3.dp)
