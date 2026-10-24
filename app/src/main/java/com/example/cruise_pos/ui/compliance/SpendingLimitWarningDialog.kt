@@ -10,13 +10,28 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.cruise.pos.shared.domain.model.ComplianceCheckResult
 import com.cruise.pos.shared.domain.model.PolicyViolationType
+
+internal data class WarningStyle(val color: Color, val icon: String, val title: String)
+
+internal fun warningStyleFor(violations: List<PolicyViolationType>): WarningStyle = when {
+    PolicyViolationType.UNDERAGE_ALCOHOL_ATTEMPT in violations ->
+        WarningStyle(Color(0xFFEF4444), "🔞", "UNDERAGE ALCOHOL RESTRICTION")
+    PolicyViolationType.FOLIO_STOP_CHARGE_FLAGGED in violations ->
+        WarningStyle(Color(0xFFF97316), "⚠️", "CABIN FOLIO STOP-CHARGE")
+    PolicyViolationType.CABIN_CREDIT_CEILING_REACHED in violations ->
+        WarningStyle(Color(0xFFFBBF24), "⚠️", "CABIN CREDIT LIMIT REACHED")
+    PolicyViolationType.PARENTAL_ARCADE_CASINO_LOCK in violations ->
+        WarningStyle(Color(0xFFFBBF24), "⚠️", "PARENTAL ACTIVITY RESTRICTION")
+    else -> WarningStyle(Color(0xFFFBBF24), "⚠️", "PARENTAL SPENDING LIMIT ALERT")
+}
 
 @Composable
 fun SpendingLimitWarningDialog(
@@ -28,14 +43,9 @@ fun SpendingLimitWarningDialog(
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val style = warningStyleFor(complianceResult.violations)
+    val headerColor = style.color
     val isUnderage = complianceResult.violations.contains(PolicyViolationType.UNDERAGE_ALCOHOL_ATTEMPT)
-    val isStopCharge = complianceResult.violations.contains(PolicyViolationType.FOLIO_STOP_CHARGE_FLAGGED)
-
-    val headerColor = when {
-        isUnderage -> Color(0xFFEF4444) // Bright red
-        isStopCharge -> Color(0xFFF97316) // Strong orange
-        else -> Color(0xFFFBBF24) // Warning amber
-    }
 
     Card(
         shape = RoundedCornerShape(20.dp),
@@ -59,16 +69,12 @@ fun SpendingLimitWarningDialog(
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
-                        text = if (isUnderage) "🔞" else "⚠️",
+                        text = style.icon,
                         fontSize = 24.sp
                     )
                     Spacer(modifier = Modifier.width(10.dp))
                     Text(
-                        text = when {
-                            isUnderage -> "UNDERAGE ALCOHOL RESTRICTION"
-                            isStopCharge -> "CABIN FOLIO STOP-CHARGE"
-                            else -> "PARENTAL SPENDING LIMIT ALERT"
-                        },
+                        text = style.title,
                         color = headerColor,
                         fontSize = 15.sp,
                         fontWeight = FontWeight.Bold,
@@ -76,7 +82,12 @@ fun SpendingLimitWarningDialog(
                     )
                 }
 
-                IconButton(onClick = onDismiss, modifier = Modifier.size(28.dp)) {
+                IconButton(
+                    onClick = onDismiss,
+                    modifier = Modifier
+                        .size(28.dp)
+                        .semantics { contentDescription = "Close warning dialog" }
+                ) {
                     Text("✕", color = Color(0xFF94A3B8), fontSize = 16.sp, fontWeight = FontWeight.Bold)
                 }
             }
@@ -130,7 +141,7 @@ fun SpendingLimitWarningDialog(
                     Button(
                         onClick = onFallbackToCash,
                         shape = RoundedCornerShape(10.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF10B981)),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF047857)),
                         modifier = Modifier
                             .fillMaxWidth()
                             .testTag("cash_fallback_button")
@@ -143,7 +154,7 @@ fun SpendingLimitWarningDialog(
                     Button(
                         onClick = onSupervisorOverride,
                         shape = RoundedCornerShape(10.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF3B82F6)),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1D4ED8)),
                         modifier = Modifier
                             .fillMaxWidth()
                             .testTag("supervisor_override_button")
