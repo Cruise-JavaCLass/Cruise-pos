@@ -192,4 +192,39 @@ class MaritimeTaxAndHappyHourTest {
             assertTrue(e.message?.contains("finite") == true)
         }
     }
+
+    @Test
+    fun testExcessiveDiscountCappedAtRegularPriceAndReconcilesBreakdown() {
+        val discountedBeyondZero = CartItem(
+            id = "c-excess",
+            menuItem = cocktailItem,
+            quantity = 2,
+            discountPerUnit = 20.0
+        )
+
+        assertEquals(12.0, discountedBeyondZero.regularUnitPrice)
+        assertEquals(0.0, discountedBeyondZero.effectiveUnitPrice)
+        assertEquals(0.0, discountedBeyondZero.itemSubtotal)
+        assertEquals(24.0, discountedBeyondZero.totalDiscount)
+
+        val portPosition = VesselPosition(
+            latitude = 25.7617,
+            longitude = -80.1918,
+            navigationMode = VesselNavigationMode.PORT_DOCKED,
+            currentPortName = "PortMiami"
+        )
+
+        val breakdown = MaritimeTaxCalculator.calculateBreakdown(
+            items = listOf(discountedBeyondZero),
+            position = portPosition
+        )
+
+        assertEquals(24.0, breakdown.subtotalBeforeDiscount)
+        assertEquals(24.0, breakdown.totalDiscount)
+        assertEquals(0.0, breakdown.taxableSubtotal)
+        assertEquals(0.0, breakdown.taxAmount)
+        assertEquals(0.0, breakdown.gratuityAmount)
+        assertEquals(0.0, breakdown.grandTotal)
+        assertEquals(breakdown.subtotalBeforeDiscount - breakdown.totalDiscount, breakdown.taxableSubtotal)
+    }
 }

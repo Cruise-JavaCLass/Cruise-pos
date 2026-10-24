@@ -34,7 +34,7 @@ object MaritimeTaxCalculator {
         }
 
         val subtotalBeforeDiscount = items.sumOf { it.regularUnitPrice * it.quantity }
-        val totalDiscount = items.sumOf { it.discountPerUnit * it.quantity }
+        val totalDiscount = items.sumOf { (it.regularUnitPrice - it.effectiveUnitPrice) * it.quantity }
         val taxableSubtotal = items.sumOf { it.itemSubtotal }
 
         val taxRate = resolveTaxRate(position)
