@@ -6,6 +6,7 @@ import com.cruise.pos.shared.domain.model.PassengerComplianceProfile
 import com.cruise.pos.shared.domain.model.PolicyViolationType
 import com.cruise.pos.shared.domain.service.GuestComplianceService
 import com.cruise.pos.shared.domain.service.InMemoryGuestSecurityAuditLogger
+import com.example.cruise_pos.ui.compliance.warningStyleFor
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -22,6 +23,25 @@ class GuestComplianceUiAndAuditTest {
     fun setUp() {
         auditLogger = InMemoryGuestSecurityAuditLogger()
         complianceService = GuestComplianceService(auditLogger)
+    }
+
+    @Test
+    fun testWarningStyleForDifferentViolations() {
+        val underageStyle = warningStyleFor(listOf(PolicyViolationType.UNDERAGE_ALCOHOL_ATTEMPT))
+        assertEquals("UNDERAGE ALCOHOL RESTRICTION", underageStyle.title)
+        assertEquals("🔞", underageStyle.icon)
+
+        val stopChargeStyle = warningStyleFor(listOf(PolicyViolationType.FOLIO_STOP_CHARGE_FLAGGED))
+        assertEquals("CABIN FOLIO STOP-CHARGE", stopChargeStyle.title)
+
+        val creditCeilingStyle = warningStyleFor(listOf(PolicyViolationType.CABIN_CREDIT_CEILING_REACHED))
+        assertEquals("CABIN CREDIT LIMIT REACHED", creditCeilingStyle.title)
+
+        val arcadeStyle = warningStyleFor(listOf(PolicyViolationType.PARENTAL_ARCADE_CASINO_LOCK))
+        assertEquals("PARENTAL ACTIVITY RESTRICTION", arcadeStyle.title)
+
+        val spendingStyle = warningStyleFor(listOf(PolicyViolationType.DAILY_ALLOWANCE_EXCEEDED))
+        assertEquals("PARENTAL SPENDING LIMIT ALERT", spendingStyle.title)
     }
 
     @Test

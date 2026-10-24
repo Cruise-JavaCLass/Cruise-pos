@@ -27,7 +27,7 @@ data class PassengerComplianceProfile(
     val dateOfBirthIso: String, // "YYYY-MM-DD"
     val isMinor: Boolean,
     val ageAtCurrentVoyage: Int,
-    val dailyAllowanceLimit: Double = 100.0,
+    val dailyAllowanceLimit: Double? = null,
     val dailySpentToday: Double = 0.0,
     val parentalAlcoholLock: Boolean = isMinor,
     val parentalArcadeLock: Boolean = false
@@ -38,10 +38,12 @@ data class CabinCreditStatus(
     val cabinNumber: String,
     val creditLimit: Double = 1500.0,
     val outstandingUnbilledBalance: Double = 0.0,
-    val availableCredit: Double = (creditLimit - outstandingUnbilledBalance).coerceAtLeast(0.0),
     val status: FolioAccountStatus = FolioAccountStatus.ACTIVE,
     val stopChargeReason: String? = null
-)
+) {
+    val availableCredit: Double
+        get() = (creditLimit - outstandingUnbilledBalance).coerceAtLeast(0.0)
+}
 
 @Serializable
 data class ComplianceCheckResult(
