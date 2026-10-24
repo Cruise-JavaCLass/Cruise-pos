@@ -6,8 +6,10 @@ import com.cruise.pos.shared.domain.model.ScanTriggerMode
 import com.cruise.pos.shared.domain.model.ScannerDeviceType
 import com.cruise.pos.shared.domain.service.MockHardwareFeedbackController
 import com.cruise.pos.shared.domain.service.UnifiedHardwareScannerEngine
+import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.runTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
@@ -37,13 +39,14 @@ class HardwareScannerThroughputTest {
 
     @Test
     fun parseSunmiBroadcast_success() = runTest {
+        val eventDeferred = async(UnconfinedTestDispatcher(testScheduler)) { scannerEngine.scanEvents.first() }
         val processed = scannerEngine.processRawBroadcastIntent(
             action = UnifiedHardwareScannerEngine.SUNMI_ACTION_SCAN,
             extrasMap = mapOf("data" to "CRUISE-GUEST-100234\n", "source_byte" to "QR_CODE")
         )
 
         assertTrue(processed)
-        val event = scannerEngine.scanEvents.first()
+        val event = eventDeferred.await()
         assertEquals("CRUISE-GUEST-100234", event.rawBarcode) // Suffix \n stripped
         assertEquals(ScannerDeviceType.SUNMI_BUILTIN_LASER, event.deviceType)
         assertEquals("QR_CODE", event.symbology)
@@ -53,6 +56,7 @@ class HardwareScannerThroughputTest {
 
     @Test
     fun parseHoneywellBroadcast_success() = runTest {
+        val eventDeferred = async(UnconfinedTestDispatcher(testScheduler)) { scannerEngine.scanEvents.first() }
         val processed = scannerEngine.processRawBroadcastIntent(
             action = UnifiedHardwareScannerEngine.HONEYWELL_ACTION_SCAN,
             extrasMap = mapOf(
@@ -62,13 +66,14 @@ class HardwareScannerThroughputTest {
         )
 
         assertTrue(processed)
-        val event = scannerEngine.scanEvents.first()
+        val event = eventDeferred.await()
         assertEquals("CRUISE-POS-ITEM-9988", event.rawBarcode)
         assertEquals(ScannerDeviceType.HONEYWELL_MOBILITY_SDK, event.deviceType)
     }
 
     @Test
     fun parseZebraBroadcast_success() = runTest {
+        val eventDeferred = async(UnconfinedTestDispatcher(testScheduler)) { scannerEngine.scanEvents.first() }
         val processed = scannerEngine.processRawBroadcastIntent(
             action = UnifiedHardwareScannerEngine.ZEBRA_ACTION_SCAN,
             extrasMap = mapOf(
@@ -78,7 +83,7 @@ class HardwareScannerThroughputTest {
         )
 
         assertTrue(processed)
-        val event = scannerEngine.scanEvents.first()
+        val event = eventDeferred.await()
         assertEquals("FOLIO-TRANSACTION-7788", event.rawBarcode)
         assertEquals(ScannerDeviceType.ZEBRA_EMDK_DATAWEDGE, event.deviceType)
         assertEquals("LABEL-TYPE-CODE128", event.symbology)

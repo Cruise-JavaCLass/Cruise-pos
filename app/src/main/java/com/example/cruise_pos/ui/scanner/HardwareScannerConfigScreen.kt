@@ -2,6 +2,8 @@ package com.example.cruise_pos.ui.scanner
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -41,21 +43,21 @@ import com.cruise.pos.shared.domain.model.HardwareScannerConfig
 import com.cruise.pos.shared.domain.model.ScanTriggerMode
 import com.cruise.pos.shared.domain.model.ScannerDeviceType
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun HardwareScannerConfigScreen(
     currentConfig: HardwareScannerConfig = HardwareScannerConfig(),
-    deviceType: ScannerDeviceType = ScannerDeviceType.AUTO_DETECT,
+    deviceType: ScannerDeviceType = currentConfig.enabledDeviceType,
     onSaveConfig: (HardwareScannerConfig) -> Unit = {},
-    onTriggerCalibration: () -> Unit = {},
+    onTriggerCalibration: () -> Boolean = { true },
     onNavigateBack: () -> Unit = {}
 ) {
-    var selectedDeviceType by remember { mutableStateOf(deviceType) }
+    var selectedDeviceType by remember { mutableStateOf(currentConfig.enabledDeviceType) }
     var selectedTriggerMode by remember { mutableStateOf(currentConfig.triggerMode) }
-    var audioFeedback by remember { mutableStateOf(currentConfig.audioFeedback) }
-    var vibrationFeedback by remember { mutableStateOf(currentConfig.vibrationFeedback) }
-    var laserAimIntensity by remember { mutableFloatStateOf(currentConfig.laserAimIntensity) }
-    var duplicateCooldownMs by remember { mutableFloatStateOf(currentConfig.duplicateCooldownMs.toFloat()) }
+    var isAudioBeepEnabled by remember { mutableStateOf(currentConfig.isAudioBeepEnabled) }
+    var isHapticVibrationEnabled by remember { mutableStateOf(currentConfig.isHapticVibrationEnabled) }
+    var illuminationLaserLevel by remember { mutableFloatStateOf(currentConfig.illuminationLaserLevel.toFloat()) }
+    var duplicateScanCooldownMillis by remember { mutableFloatStateOf(currentConfig.duplicateScanCooldownMillis.toFloat()) }
     var calibrationSuccess by remember { mutableStateOf(false) }
 
     Scaffold(
@@ -89,11 +91,12 @@ fun HardwareScannerConfigScreen(
                         style = MaterialTheme.typography.titleMedium
                     )
                     Spacer(modifier = Modifier.height(8.dp))
-                    Row(
+                    FlowRow(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        ScannerDeviceType.values().forEach { type ->
+                        ScannerDeviceType.entries.forEach { type ->
                             FilterChip(
                                 selected = selectedDeviceType == type,
                                 onClick = { selectedDeviceType = type },
@@ -116,11 +119,12 @@ fun HardwareScannerConfigScreen(
                         style = MaterialTheme.typography.titleMedium
                     )
                     Spacer(modifier = Modifier.height(8.dp))
-                    Row(
+                    FlowRow(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        ScanTriggerMode.values().forEach { mode ->
+                        ScanTriggerMode.entries.forEach { mode ->
                             FilterChip(
                                 selected = selectedTriggerMode == mode,
                                 onClick = { selectedTriggerMode = mode },
@@ -151,8 +155,8 @@ fun HardwareScannerConfigScreen(
                     ) {
                         Text("Audio Beep Feedback")
                         Switch(
-                            checked = audioFeedback,
-                            onCheckedChange = { audioFeedback = it },
+                            checked = isAudioBeepEnabled,
+                            onCheckedChange = { isAudioBeepEnabled = it },
                             modifier = Modifier.testTag("switch_audio")
                         )
                     }
@@ -164,8 +168,8 @@ fun HardwareScannerConfigScreen(
                     ) {
                         Text("Haptic Vibration Feedback")
                         Switch(
-                            checked = vibrationFeedback,
-                            onCheckedChange = { vibrationFeedback = it },
+                            checked = isHapticVibrationEnabled,
+                            onCheckedChange = { isHapticVibrationEnabled = it },
                             modifier = Modifier.testTag("switch_vibration")
                         )
                     }
@@ -179,24 +183,25 @@ fun HardwareScannerConfigScreen(
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     Text(
-                        text = "Illumination & Laser Aim Intensity: ${(laserAimIntensity * 100).toInt()}%",
+                        text = "Illumination Laser Level: ${illuminationLaserLevel.toInt()}",
                         style = MaterialTheme.typography.titleMedium
                     )
                     Slider(
-                        value = laserAimIntensity,
-                        onValueChange = { laserAimIntensity = it },
-                        valueRange = 0.1f..1.0f,
+                        value = illuminationLaserLevel,
+                        onValueChange = { illuminationLaserLevel = it },
+                        valueRange = 1f..10f,
+                        steps = 8,
                         modifier = Modifier.testTag("slider_laser")
                     )
 
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
-                        text = "Duplicate Cooldown: ${duplicateCooldownMs.toInt()} ms",
+                        text = "Duplicate Cooldown: ${duplicateScanCooldownMillis.toInt()} ms",
                         style = MaterialTheme.typography.titleMedium
                     )
                     Slider(
-                        value = duplicateCooldownMs,
-                        onValueChange = { duplicateCooldownMs = it },
+                        value = duplicateScanCooldownMillis,
+                        onValueChange = { duplicateScanCooldownMillis = it },
                         valueRange = 50f..1000f,
                         modifier = Modifier.testTag("slider_cooldown")
                     )
@@ -210,8 +215,8 @@ fun HardwareScannerConfigScreen(
             ) {
                 OutlinedButton(
                     onClick = {
-                        onTriggerCalibration()
-                        calibrationSuccess = true
+                        val ok = onTriggerCalibration()
+                        calibrationSuccess = ok
                     },
                     modifier = Modifier
                         .weight(1f)
@@ -222,12 +227,13 @@ fun HardwareScannerConfigScreen(
 
                 Button(
                     onClick = {
-                        val newConfig = HardwareScannerConfig(
+                        val newConfig = currentConfig.copy(
+                            enabledDeviceType = selectedDeviceType,
                             triggerMode = selectedTriggerMode,
-                            audioFeedback = audioFeedback,
-                            vibrationFeedback = vibrationFeedback,
-                            laserAimIntensity = laserAimIntensity,
-                            duplicateCooldownMs = duplicateCooldownMs.toLong()
+                            isAudioBeepEnabled = isAudioBeepEnabled,
+                            isHapticVibrationEnabled = isHapticVibrationEnabled,
+                            illuminationLaserLevel = illuminationLaserLevel.toInt().coerceIn(1, 10),
+                            duplicateScanCooldownMillis = duplicateScanCooldownMillis.toLong()
                         )
                         onSaveConfig(newConfig)
                     },
