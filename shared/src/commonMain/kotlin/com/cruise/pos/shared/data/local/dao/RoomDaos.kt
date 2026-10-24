@@ -31,6 +31,7 @@ interface TransactionDao {
     suspend fun getNextMonotonicSequence(): Long
     suspend fun insertTransaction(transaction: TransactionEntity)
     suspend fun updateSyncStatus(transactionId: String, status: TransactionSyncStatus, syncedAtEpochMs: Long? = null)
+    suspend fun markFailedAndIncrementRetry(transactionId: String, errorMessage: String)
     suspend fun getTransactionById(id: String): TransactionEntity?
     suspend fun getAllTransactions(): List<TransactionEntity>
 }
@@ -106,6 +107,7 @@ class InMemoryTransactionDao : TransactionDao {
 
     override suspend fun insertTransaction(transaction: TransactionEntity) = mutex.withLock {
         val current = transactionsFlow.value.toMutableList()
+        require(current.none { it.id == transaction.id }) { "Transaction with id ${transaction.id} already exists" }
         current.add(transaction)
         transactionsFlow.value = current
     }
@@ -121,6 +123,23 @@ class InMemoryTransactionDao : TransactionDao {
             current[index] = current[index].copy(
                 syncStatus = status,
                 syncedAtEpochMs = syncedAtEpochMs
+            )
+            transactionsFlow.value = current
+        }
+    }
+
+    override suspend fun markFailedAndIncrementRetry(
+        transactionId: String,
+        errorMessage: String
+    ) = mutex.withLock {
+        val current = transactionsFlow.value.toMutableList()
+        val index = current.indexOfFirst { it.id == transactionId }
+        if (index != -1) {
+            val existing = current[index]
+            current[index] = existing.copy(
+                syncStatus = TransactionSyncStatus.FAILED,
+                retryCount = existing.retryCount + 1,
+                lastError = errorMessage
             )
             transactionsFlow.value = current
         }

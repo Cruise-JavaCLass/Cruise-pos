@@ -23,8 +23,7 @@ class Migration1To2 : DatabaseMigration {
 
     override fun migrateTransactions(transactions: List<TransactionEntity>): List<TransactionEntity> {
         return transactions.map { tx ->
-            // In v1, retryCount defaulted or did not exist; preserve exact transaction data
-            tx.copy(retryCount = 0)
+            if (tx.retryCount != 0) tx.copy(retryCount = 0) else tx
         }
     }
 }
@@ -37,6 +36,11 @@ class DatabaseMigrationManager(
         targetVersion: Int,
         transactions: List<TransactionEntity>
     ): List<TransactionEntity> {
+        require(currentVersion <= targetVersion) {
+            "Downgrade from version $currentVersion to $targetVersion is not supported"
+        }
+        if (currentVersion == targetVersion) return transactions
+
         var version = currentVersion
         var data = transactions
 

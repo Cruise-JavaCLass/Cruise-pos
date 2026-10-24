@@ -51,5 +51,6 @@ data class TransactionEntity(
     val syncStatus: TransactionSyncStatus = TransactionSyncStatus.PENDING,
     val createdAtEpochMs: Long,
     val syncedAtEpochMs: Long? = null,
-    val retryCount: Int = 0
+    val retryCount: Int = 0,
+    val lastError: String? = null
 )
