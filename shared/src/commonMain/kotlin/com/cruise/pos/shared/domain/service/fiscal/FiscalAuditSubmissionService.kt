@@ -46,10 +46,12 @@ class FiscalAuditSubmissionService(
         )
 
         return apiClient.submitSignedFiscalReport(submission).mapCatching { response ->
-            if (response.status == "REJECTED") {
-                throw IllegalStateException("Fiscal report ${submission.reportId} rejected: ${response.message}")
+            when (response.status.uppercase()) {
+                "ACCEPTED", "QUEUED" -> response
+                else -> throw IllegalStateException(
+                    "Fiscal report ${submission.reportId} not accepted (status=${response.status}): ${response.message}"
+                )
             }
-            response
         }
     }
 }

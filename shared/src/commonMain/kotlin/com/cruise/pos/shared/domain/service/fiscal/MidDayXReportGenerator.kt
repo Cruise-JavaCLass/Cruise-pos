@@ -11,7 +11,15 @@ import com.cruise.pos.shared.domain.model.fiscal.PaymentTenderSummary
  * Produces a non-destructive audit snapshot of active shift transactions without resetting
  * sequence counters or altering drawer totals.
  */
-class MidDayXReportGenerator {
+class MidDayXReportGenerator(
+    private val clock: () -> Long = { 1774274400000L }
+) {
+
+    private fun formatMoney(value: Double): String {
+        val cents = kotlin.math.round(kotlin.math.abs(value) * 100.0).toLong()
+        val sign = if (value < 0.0 && cents != 0L) "-" else ""
+        return "$sign${cents / 100}.${(cents % 100).toString().padStart(2, '0')}"
+    }
 
     /**
      * Builds non-destructive mid-day X-Report snapshot.
@@ -26,7 +34,7 @@ class MidDayXReportGenerator {
         supervisorId: String,
         supervisorName: String,
         openedAtEpochMs: Long,
-        snapshotTimestampEpochMs: Long = openedAtEpochMs,
+        snapshotTimestampEpochMs: Long = clock(),
         totalTransactions: Int,
         totalGrossRevenue: Double,
         totalDiscounts: Double,
@@ -87,28 +95,34 @@ class MidDayXReportGenerator {
         for (tender in snapshot.paymentTenders) {
             val label = tender.tenderType.padEnd(18)
             val cnt = "(${tender.count})".padStart(6)
-            val amt = "$${"%.2f".format(tender.totalAmount)}".padStart(12)
+            val amt = "$${formatMoney(tender.totalAmount)}".padStart(12)
             sb.append("$label $cnt $amt\n")
         }
         sb.append(sep)
-        sb.append("Gross Sales : $${"%.2f".format(snapshot.totalGrossRevenue)}\n")
-        sb.append("Discounts   : -$${"%.2f".format(snapshot.totalDiscounts)}\n")
-        sb.append("Refunds     : -$${"%.2f".format(snapshot.totalRefunds)}\n")
-        sb.append("Net Revenue : $${"%.2f".format(snapshot.totalNetRevenue)}\n")
+        sb.append("Gross Sales : $${formatMoney(snapshot.totalGrossRevenue)}\n")
+        sb.append("Discounts   : -$${formatMoney(snapshot.totalDiscounts)}\n")
+        sb.append("Refunds     : -$${formatMoney(snapshot.totalRefunds)}\n")
+        sb.append("Net Revenue : $${formatMoney(snapshot.totalNetRevenue)}\n")
         sb.append(sep)
         sb.append("CASH DRAWER SNAPSHOT:\n")
-        sb.append("Opening Cash Float  : $${"%.2f".format(snapshot.cashDrawer.openingFloat)}\n")
-        sb.append("Cash Sales          : $${"%.2f".format(snapshot.cashDrawer.cashSales)}\n")
-        sb.append("Mid-Shift Drops     : -$${"%.2f".format(snapshot.cashDrawer.cashDrops)}\n")
-        sb.append("Expected In Drawer  : $${"%.2f".format(snapshot.cashDrawer.expectedCash)}\n")
+        sb.append("Opening Cash Float  : $${formatMoney(snapshot.cashDrawer.openingFloat)}\n")
+        sb.append("Cash Sales          : $${formatMoney(snapshot.cashDrawer.cashSales)}\n")
+        if (snapshot.cashDrawer.paidIns > 0.0) {
+            sb.append("Paid In Cash        : +$${formatMoney(snapshot.cashDrawer.paidIns)}\n")
+        }
+        if (snapshot.cashDrawer.paidOuts > 0.0) {
+            sb.append("Paid Out Cash       : -$${formatMoney(snapshot.cashDrawer.paidOuts)}\n")
+        }
+        sb.append("Mid-Shift Drops     : -$${formatMoney(snapshot.cashDrawer.cashDrops)}\n")
+        sb.append("Expected In Drawer  : $${formatMoney(snapshot.cashDrawer.expectedCash)}\n")
 
         snapshot.fiscalSummary?.let { fiscal ->
             sb.append(sep)
             sb.append("MARITIME FISCAL & DUTY-FREE:\n")
             sb.append("Territorial Status : ${fiscal.territorialStatus.name}\n")
-            sb.append("Duty-Free Exempt   : $${"%.2f".format(fiscal.totalExemptDutyFreeSales)}\n")
-            sb.append("Taxable Sales      : $${"%.2f".format(fiscal.totalTaxableSales)}\n")
-            sb.append("Tax Collected      : $${"%.2f".format(fiscal.totalTaxCollected)}\n")
+            sb.append("Duty-Free Exempt   : $${formatMoney(fiscal.totalExemptDutyFreeSales)}\n")
+            sb.append("Taxable Sales      : $${formatMoney(fiscal.totalTaxableSales)}\n")
+            sb.append("Tax Collected      : $${formatMoney(fiscal.totalTaxCollected)}\n")
         }
 
         sb.append(dsep)

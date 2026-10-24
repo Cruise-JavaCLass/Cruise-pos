@@ -75,32 +75,43 @@ class FiscalShiftReportBuilder(
         )
     }
 
-    /**
-     * Serializes ledger to JSON.
-     */
-    fun exportToJson(ledger: FiscalShiftLedger): String {
-        return jsonSerializer.encodeToString(ledger)
+    companion object {
+        /**
+         * Serializes ledger to JSON.
+         */
+        fun exportToJson(ledger: FiscalShiftLedger): String {
+            return Json { prettyPrint = true }.encodeToString(ledger)
+        }
+
+        private fun formatMoney(value: Double): String {
+            val cents = kotlin.math.round(kotlin.math.abs(value) * 100.0).toLong()
+            val sign = if (value < 0.0 && cents != 0L) "-" else ""
+            return "$sign${cents / 100}.${(cents % 100).toString().padStart(2, '0')}"
+        }
+
+        /**
+         * Exports receipts audit trail as standard CSV for shipboard ERP / accounting ingestion.
+         */
+        fun exportToCsv(ledger: FiscalShiftLedger): String {
+            val sb = StringBuilder()
+            // Header
+            sb.append("Seq,TxId,Folio,Cabin,Timestamp,Amount,Tax,Tender,SigHash,ReceiptHash\n")
+            for (e in ledger.receiptEntries) {
+                sb.append("${e.sequenceNumber},")
+                sb.append("\"${e.transactionId}\",")
+                sb.append("\"${e.guestFolioId}\",")
+                sb.append("\"${e.cabinNumber}\",")
+                sb.append("${e.timestampEpochMs},")
+                sb.append(formatMoney(e.totalAmount)).append(',')
+                sb.append(formatMoney(e.taxAmount)).append(',')
+                sb.append("\"${e.tenderType}\",")
+                sb.append("\"${e.signatureHashSha256}\",")
+                sb.append("\"${e.receiptPayloadHashSha256}\"\n")
+            }
+            return sb.toString()
+        }
     }
 
-    /**
-     * Exports receipts audit trail as standard CSV for shipboard ERP / accounting ingestion.
-     */
-    fun exportToCsv(ledger: FiscalShiftLedger): String {
-        val sb = StringBuilder()
-        // Header
-        sb.append("Seq,TxId,Folio,Cabin,Timestamp,Amount,Tax,Tender,SigHash,ReceiptHash\n")
-        for (e in ledger.receiptEntries) {
-            sb.append("${e.sequenceNumber},")
-            sb.append("\"${e.transactionId}\",")
-            sb.append("\"${e.guestFolioId}\",")
-            sb.append("\"${e.cabinNumber}\",")
-            sb.append("${e.timestampEpochMs},")
-            sb.append("${"%.2f".format(e.totalAmount)},")
-            sb.append("${"%.2f".format(e.taxAmount)},")
-            sb.append("\"${e.tenderType}\",")
-            sb.append("\"${e.signatureHashSha256}\",")
-            sb.append("\"${e.receiptPayloadHashSha256}\"\n")
-        }
-        return sb.toString()
-    }
+    fun exportToJson(ledger: FiscalShiftLedger): String = Companion.exportToJson(ledger)
+    fun exportToCsv(ledger: FiscalShiftLedger): String = Companion.exportToCsv(ledger)
 }

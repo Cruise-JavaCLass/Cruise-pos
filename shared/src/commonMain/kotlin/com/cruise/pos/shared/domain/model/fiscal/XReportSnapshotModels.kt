@@ -24,7 +24,8 @@ data class CashDrawerReconciliation(
     val paidOuts: Double = 0.0,
     val cashDrops: Double = 0.0
 ) {
-    val expectedCash: Double get() = openingFloat + cashSales + paidIns - paidOuts - cashDrops
+    val expectedCash: Double
+        get() = kotlin.math.round((openingFloat + cashSales + paidIns - paidOuts - cashDrops) * 100.0) / 100.0
 }
 
 @Serializable
