@@ -6,6 +6,7 @@ import com.cruise.pos.shared.data.local.migration.DatabaseMigrationManager
 import com.cruise.pos.shared.data.local.migration.Migration1To2
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertNotNull
 
 class RoomDatabaseMigrationTest {
@@ -30,7 +31,7 @@ class RoomDatabaseMigrationTest {
                 signatureSvg = "svg_sig_v1_100",
                 syncStatus = TransactionSyncStatus.PENDING,
                 createdAtEpochMs = 1774268000000L,
-                retryCount = 0
+                retryCount = 3 // Non-zero retryCount to test reset or preservation
             ),
             TransactionEntity(
                 id = "TX-V1-101",
@@ -75,5 +76,13 @@ class RoomDatabaseMigrationTest {
         assertEquals(2L, tx2.sequenceNumber)
         assertEquals(23.68, tx2.totalAmount)
         assertEquals(TransactionSyncStatus.PENDING, tx2.syncStatus)
+    }
+
+    @Test
+    fun testDowngradeMigrationThrowsException() {
+        val migrationManager = DatabaseMigrationManager(listOf(Migration1To2()))
+        assertFailsWith<IllegalArgumentException> {
+            migrationManager.executeMigrations(currentVersion = 2, targetVersion = 1, transactions = emptyList())
+        }
     }
 }

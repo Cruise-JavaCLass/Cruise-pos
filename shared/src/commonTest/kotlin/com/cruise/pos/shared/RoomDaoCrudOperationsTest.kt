@@ -105,8 +105,9 @@ class RoomDaoCrudOperationsTest {
             createdAtEpochMs = 1774268010000L
         )
 
-        transactionDao.insertTransaction(tx1)
+        // Insert tx2 before tx1 to verify ordering is by sequenceNumber (FIFO), not insertion order
         transactionDao.insertTransaction(tx2)
+        transactionDao.insertTransaction(tx1)
 
         val pending = transactionDao.getPendingTransactionsFlow().first()
         assertEquals(2, pending.size)
@@ -118,5 +119,13 @@ class RoomDaoCrudOperationsTest {
         val remainingPending = transactionDao.getPendingTransactionsFlow().first()
         assertEquals(1, remainingPending.size)
         assertEquals("TX-002", remainingPending[0].id)
+
+        // Mark TX-002 as failed with error
+        transactionDao.markFailedAndIncrementRetry("TX-002", "Network timeout")
+        val failedTx = transactionDao.getTransactionById("TX-002")
+        assertNotNull(failedTx)
+        assertEquals(TransactionSyncStatus.FAILED, failedTx.syncStatus)
+        assertEquals(1, failedTx.retryCount)
+        assertEquals("Network timeout", failedTx.lastError)
     }
 }

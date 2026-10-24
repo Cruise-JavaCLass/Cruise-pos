@@ -14,11 +14,11 @@ class SqlCipherKeyManager : DatabasePassphraseProvider {
      */
     override fun getPassphrase(): ByteArray {
         val existing = cachedPassphrase
-        if (existing != null) return existing
+        if (existing != null) return existing.copyOf()
 
         val key = generateOrRetrieveKey()
         cachedPassphrase = key
-        return key
+        return key.copyOf()
     }
 
     fun clearKey() {
