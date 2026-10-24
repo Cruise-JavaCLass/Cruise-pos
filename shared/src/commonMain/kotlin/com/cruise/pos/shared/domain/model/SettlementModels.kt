@@ -12,6 +12,13 @@ enum class PaymentMethodType {
 }
 
 @Serializable
+enum class LedgerSyncStatus {
+    PENDING,
+    SYNCED,
+    FAILED_RETRY
+}
+
+@Serializable
 data class PaymentMethodBreakdown(
     val method: PaymentMethodType,
     val transactionCount: Int,
@@ -69,7 +76,9 @@ data class ShiftZReport(
     val cashDiscrepancy: Double = actualCountedCash - expectedCashInDrawer, // Negative = Shortage, Positive = Over
     val isOverShortApproved: Boolean = false,
     val supervisorOverridePin: String? = null,
-    val backendLedgerSyncStatus: String = "PENDING"
+    val backendLedgerSyncStatus: LedgerSyncStatus = LedgerSyncStatus.PENDING
 ) {
     val isBalanced: Boolean get() = kotlin.math.abs(cashDiscrepancy) < 0.01
+
+    val requiresSupervisorApproval: Boolean get() = kotlin.math.abs(cashDiscrepancy) > 10.0
 }

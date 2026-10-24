@@ -9,6 +9,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -33,12 +34,12 @@ fun ShiftSettlementWizardDialog(
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    var step by remember { mutableIntStateOf(1) } // Step 1: X-Report Review, Step 2: Blind Drop Input, Step 3: Z-Report Final
-    var countedCashText by remember { mutableStateOf("") }
-    var witnessName by remember { mutableStateOf("") }
-    var supervisorPinText by remember { mutableStateOf("") }
+    var step by rememberSaveable { mutableIntStateOf(1) } // Step 1: X-Report Review, Step 2: Blind Drop Input, Step 3: Z-Report Final
+    var countedCashText by rememberSaveable { mutableStateOf("") }
+    var witnessName by rememberSaveable { mutableStateOf("") }
+    var supervisorPinText by rememberSaveable { mutableStateOf("") }
     var finalizedZReport by remember { mutableStateOf<ShiftZReport?>(null) }
-    var errorMessage by remember { mutableStateOf<String?>(null) }
+    var errorMessage by rememberSaveable { mutableStateOf<String?>(null) }
 
     Card(
         shape = RoundedCornerShape(20.dp),
@@ -208,7 +209,7 @@ fun ShiftSettlementWizardDialog(
                                 return@Button
                             }
 
-                            val drop = BlindDropDeclaration(parsed, witnessName)
+                            val drop = BlindDropDeclaration(parsed, witnessName.trim().takeIf { it.isNotBlank() })
                             val z = settlementService.generateFinalZReport(xReport, drop)
                             finalizedZReport = z
                             step = 3
@@ -227,7 +228,7 @@ fun ShiftSettlementWizardDialog(
                     // STEP 3: Z-Report Results & Receipt Printing
                     val z = finalizedZReport
                     if (z != null) {
-                        val isOverShort = kotlin.math.abs(z.cashDiscrepancy) > 10.0
+                        val isOverShort = z.requiresSupervisorApproval
 
                         Surface(
                             color = if (z.isBalanced) Color(0xFF065F46) else Color(0xFF7F1D1D),
@@ -247,9 +248,9 @@ fun ShiftSettlementWizardDialog(
                             }
                         }
 
-                        if (isOverShort && !z.isOverShortApproved) {
+                        if (z.requiresSupervisorApproval && !z.isOverShortApproved) {
                             Spacer(modifier = Modifier.height(12.dp))
-                            Text("Discrepancy exceeds $10 threshold. Supervisor PIN required to approve closure.", color = Color(0xFFFBBF24), fontSize = 12.sp)
+                            Text("Discrepancy exceeds threshold. Supervisor PIN required to approve closure.", color = Color(0xFFFBBF24), fontSize = 12.sp)
                             Spacer(modifier = Modifier.height(6.dp))
                             OutlinedTextField(
                                 value = supervisorPinText,
@@ -280,7 +281,7 @@ fun ShiftSettlementWizardDialog(
                             onClick = {
                                 onZReportFinalized(z.copy(supervisorOverridePin = supervisorPinText.takeIf { it.isNotBlank() }))
                             },
-                            enabled = z.isOverShortApproved || supervisorPinText.isNotBlank(),
+                            enabled = !z.requiresSupervisorApproval || z.isOverShortApproved || supervisorPinText.isNotBlank(),
                             colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF059669)),
                             shape = RoundedCornerShape(10.dp),
                             modifier = Modifier

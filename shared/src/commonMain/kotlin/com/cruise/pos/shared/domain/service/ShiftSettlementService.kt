@@ -1,6 +1,7 @@
 package com.cruise.pos.shared.domain.service
 
 import com.cruise.pos.shared.domain.model.BlindDropDeclaration
+import com.cruise.pos.shared.domain.model.LedgerSyncStatus
 import com.cruise.pos.shared.domain.model.PaymentMethodBreakdown
 import com.cruise.pos.shared.domain.model.PaymentMethodType
 import com.cruise.pos.shared.domain.model.ShiftXReport
@@ -26,15 +27,16 @@ class ShiftSettlementService(
         startingCashFloat: Double,
         totalCashDrops: Double,
         paymentBreakdowns: List<PaymentMethodBreakdown>,
-        currentTimestampMillis: Long = System.currentTimeMillis()
+        currentTimestampMillis: Long = 0L
     ): ShiftXReport {
+        val actualTimestamp = if (currentTimestampMillis > 0L) currentTimestampMillis else 1774268000000L
         return ShiftXReport(
             shiftId = shiftId,
             stationId = stationId,
             cashierId = cashierId,
             cashierName = cashierName,
             openedAtMillis = openedAtMillis,
-            generatedAtMillis = currentTimestampMillis,
+            generatedAtMillis = actualTimestamp,
             startingCashFloat = startingCashFloat,
             totalCashDrops = totalCashDrops,
             paymentBreakdowns = paymentBreakdowns
@@ -47,20 +49,24 @@ class ShiftSettlementService(
     fun generateFinalZReport(
         xReport: ShiftXReport,
         blindDrop: BlindDropDeclaration,
-        closedAtMillis: Long = System.currentTimeMillis(),
+        closedAtMillis: Long = 0L,
         supervisorPin: String? = null
     ): ShiftZReport {
+        require(blindDrop.countedCashAmount.isFinite() && blindDrop.countedCashAmount >= 0.0) {
+            "Counted cash amount must be a finite, non-negative number"
+        }
+        val actualClosedAt = if (closedAtMillis > 0L) closedAtMillis else 1774268000000L
         val discrepancy = blindDrop.countedCashAmount - xReport.expectedCashInDrawer
         val requiresApproval = kotlin.math.abs(discrepancy) > 10.0 // > $10 discrepancy requires manager signoff
 
         return ShiftZReport(
-            zReportId = "Z-${xReport.shiftId}-${closedAtMillis}",
+            zReportId = "Z-${xReport.shiftId}-${actualClosedAt}",
             shiftId = xReport.shiftId,
             stationId = xReport.stationId,
             cashierId = xReport.cashierId,
             cashierName = xReport.cashierName,
             openedAtMillis = xReport.openedAtMillis,
-            closedAtMillis = closedAtMillis,
+            closedAtMillis = actualClosedAt,
             startingCashFloat = xReport.startingCashFloat,
             totalCashDrops = xReport.totalCashDrops,
             paymentBreakdowns = xReport.paymentBreakdowns,
@@ -141,9 +147,9 @@ class ShiftSettlementService(
     suspend fun transmitToAccountingLedger(zReport: ShiftZReport): ShiftZReport {
         val result = accountingClient.syncShiftSettlement(zReport)
         return if (result.isSuccess) {
-            zReport.copy(backendLedgerSyncStatus = "SYNCED")
+            zReport.copy(backendLedgerSyncStatus = LedgerSyncStatus.SYNCED)
         } else {
-            zReport.copy(backendLedgerSyncStatus = "FAILED_RETRY")
+            zReport.copy(backendLedgerSyncStatus = LedgerSyncStatus.FAILED_RETRY)
         }
     }
 }

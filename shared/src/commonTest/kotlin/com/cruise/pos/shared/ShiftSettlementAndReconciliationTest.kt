@@ -1,6 +1,7 @@
 package com.cruise.pos.shared
 
 import com.cruise.pos.shared.domain.model.BlindDropDeclaration
+import com.cruise.pos.shared.domain.model.LedgerSyncStatus
 import com.cruise.pos.shared.domain.model.PaymentMethodBreakdown
 import com.cruise.pos.shared.domain.model.PaymentMethodType
 import com.cruise.pos.shared.domain.service.MockBackendAccountingLedgerClient
@@ -130,12 +131,12 @@ class ShiftSettlementAndReconciliationTest {
 
         // Success sync
         val synced = service.transmitToAccountingLedger(zReport)
-        assertEquals("SYNCED", synced.backendLedgerSyncStatus)
+        assertEquals(LedgerSyncStatus.SYNCED, synced.backendLedgerSyncStatus)
         assertEquals(1, ledgerClient.syncedReports.size)
 
         // Failure sync
         ledgerClient.shouldSucceed = false
         val failed = service.transmitToAccountingLedger(zReport)
-        assertEquals("FAILED_RETRY", failed.backendLedgerSyncStatus)
+        assertEquals(LedgerSyncStatus.FAILED_RETRY, failed.backendLedgerSyncStatus)
     }
 }
