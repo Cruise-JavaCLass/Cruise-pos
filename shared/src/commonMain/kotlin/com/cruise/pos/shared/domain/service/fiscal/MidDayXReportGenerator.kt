@@ -26,7 +26,7 @@ class MidDayXReportGenerator {
         supervisorId: String,
         supervisorName: String,
         openedAtEpochMs: Long,
-        snapshotTimestampEpochMs: Long = System.currentTimeMillis(),
+        snapshotTimestampEpochMs: Long = openedAtEpochMs,
         totalTransactions: Int,
         totalGrossRevenue: Double,
         totalDiscounts: Double,

@@ -18,18 +18,21 @@ class FiscalAuditSubmissionService(
     suspend fun signAndSubmitFiscalReport(
         keyAlias: String,
         ledger: FiscalShiftLedger,
-        submissionTimestampEpochMs: Long = System.currentTimeMillis()
+        submissionTimestampEpochMs: Long = ledger.closedAtEpochMs
     ): Result<FiscalReportSubmissionResponse> {
         val payloadJson = reportBuilder.exportToJson(ledger)
         val payloadBytes = payloadJson.encodeToByteArray()
 
-        val signResult = signer.signPayload(keyAlias, payloadBytes)
-        if (signResult.isFailure) {
-            return Result.failure(signResult.exceptionOrNull() ?: RuntimeException("Digital signature failure"))
+        val signatureHex = signer.signPayload(keyAlias, payloadBytes).getOrElse { e ->
+            if (e is kotlin.coroutines.cancellation.CancellationException) throw e
+            return Result.failure(e)
         }
-
-        val signatureHex = signResult.getOrThrow()
-        val certFingerprint = signer.getCertificateFingerprint(keyAlias)
+        val certFingerprint = try {
+            signer.getCertificateFingerprint(keyAlias)
+        } catch (e: Exception) {
+            if (e is kotlin.coroutines.cancellation.CancellationException) throw e
+            return Result.failure(e)
+        }
 
         val submission = SignedFiscalReportSubmission(
             reportId = ledger.exportId,
@@ -42,6 +45,11 @@ class FiscalAuditSubmissionService(
             payloadJson = payloadJson
         )
 
-        return apiClient.submitSignedFiscalReport(submission)
+        return apiClient.submitSignedFiscalReport(submission).mapCatching { response ->
+            if (response.status == "REJECTED") {
+                throw IllegalStateException("Fiscal report ${submission.reportId} rejected: ${response.message}")
+            }
+            response
+        }
     }
 }

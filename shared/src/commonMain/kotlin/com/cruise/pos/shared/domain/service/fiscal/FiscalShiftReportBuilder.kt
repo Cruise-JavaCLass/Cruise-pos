@@ -18,13 +18,20 @@ class FiscalShiftReportBuilder(
      */
     fun computeCumulativeHashRoot(entries: List<ReceiptAuditEntry>): String {
         if (entries.isEmpty()) return "0".repeat(64)
-        var cumulative = 0L
-        for (entry in entries) {
-            val combined = "${entry.sequenceNumber}:${entry.transactionId}:${entry.receiptPayloadHashSha256}"
-            cumulative = 31L * cumulative + combined.hashCode().toLong()
+        val ordered = entries.sortedBy { it.sequenceNumber }
+        var level = ordered.map {
+            com.cruise.pos.shared.domain.service.Sha256Digest.digest("${it.sequenceNumber}:${it.transactionId}:${it.receiptPayloadHashSha256}".encodeToByteArray())
         }
-        val hex = cumulative.toString(16).padStart(16, '0')
-        return hex.repeat(4) // 64-char simulated hex root
+        while (level.size > 1) {
+            level = level.chunked(2).map { chunk ->
+                if (chunk.size == 2) {
+                    com.cruise.pos.shared.domain.service.Sha256Digest.digest((chunk[0] + chunk[1]).encodeToByteArray())
+                } else {
+                    chunk[0]
+                }
+            }
+        }
+        return level.single()
     }
 
     /**

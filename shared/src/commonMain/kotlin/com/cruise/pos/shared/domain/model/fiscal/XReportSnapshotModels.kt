@@ -22,9 +22,10 @@ data class CashDrawerReconciliation(
     val cashSales: Double,
     val paidIns: Double = 0.0,
     val paidOuts: Double = 0.0,
-    val cashDrops: Double = 0.0,
-    val expectedCash: Double = openingFloat + cashSales + paidIns - paidOuts - cashDrops
-)
+    val cashDrops: Double = 0.0
+) {
+    val expectedCash: Double get() = openingFloat + cashSales + paidIns - paidOuts - cashDrops
+}
 
 @Serializable
 data class MidDayXReportSnapshot(
@@ -49,4 +50,8 @@ data class MidDayXReportSnapshot(
     val cashDrawer: CashDrawerReconciliation,
     val hourlyActivity: List<HourlySalesBucket>,
     val fiscalSummary: MaritimeFiscalSummary? = null
-)
+) {
+    init {
+        require(!isShiftClosed) { "X-Report snapshot must have isShiftClosed == false" }
+    }
+}

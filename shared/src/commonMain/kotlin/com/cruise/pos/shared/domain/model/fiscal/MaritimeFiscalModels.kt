@@ -25,9 +25,10 @@ data class MaritimeTaxItem(
     val description: String,
     val category: FiscalItemCategory,
     val quantity: Int,
-    val unitPrice: Double,
-    val grossAmount: Double = quantity * unitPrice
-)
+    val unitPrice: Double
+) {
+    val grossAmount: Double get() = quantity * unitPrice
+}
 
 @Serializable
 data class MaritimeTaxBreakdown(

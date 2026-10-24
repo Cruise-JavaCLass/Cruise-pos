@@ -186,6 +186,7 @@ class MaritimeFiscalDutyFreeAndAuditReconciliationTest {
         assertEquals(140.0, ledger.totalFolioSales)
         assertNotNull(ledger.cumulativeMerkleRootSha256)
         assertEquals(64, ledger.cumulativeMerkleRootSha256.length)
+        assertTrue(ledger.cumulativeMerkleRootSha256.all { it in "0123456789abcdef" })
 
         // Test JSON & CSV export
         val jsonOutput = reportBuilder.exportToJson(ledger)
@@ -233,5 +234,16 @@ class MaritimeFiscalDutyFreeAndAuditReconciliationTest {
         assertEquals("ACCEPTED", response.status)
         assertEquals("SUB-ACK-999", response.submissionId)
         assertEquals("SHA256:F4:89:C1:90:3A:21", mockApiClient.submittedPackage?.digitalCertificateFingerprint)
+    }
+
+    @Test
+    fun testTerritorialBoundaryAtTwelveMiles() {
+        val calc = MaritimeDutyFreeTaxCalculator()
+        val atTwelve = calc.determineTerritorialStatus(12.0, false)
+        assertEquals(MaritimeTerritorialWaters.TERRITORIAL_WATERS, atTwelve)
+        val beyondTwelve = calc.determineTerritorialStatus(12.001, false)
+        assertEquals(MaritimeTerritorialWaters.INTERNATIONAL_WATERS, beyondTwelve)
+        val inPort = calc.determineTerritorialStatus(0.0, true)
+        assertEquals(MaritimeTerritorialWaters.IN_PORT, inPort)
     }
 }

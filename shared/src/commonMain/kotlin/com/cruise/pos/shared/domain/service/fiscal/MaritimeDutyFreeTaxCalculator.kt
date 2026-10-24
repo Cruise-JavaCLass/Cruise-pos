@@ -30,13 +30,16 @@ class MaritimeDutyFreeTaxCalculator(
      * Determines territorial status based on distance from nearest national coastline (nautical miles).
      * Nautical boundary rule:
      * - > 12.0 NM: International Waters (Duty-free zero tax)
-     * - > 0.0 and <= 12.0 NM: Territorial Waters (Partial tax / reduced rate)
-     * - 0.0 or in port: In-Port (Full standard port tax applied)
+     * - <= 12.0 NM: Territorial Waters unless vessel is docked at port (isDockedAtPort = true)
+     * - isDockedAtPort: In-Port (Full standard port tax applied)
      */
     fun determineTerritorialStatus(
         nauticalMilesFromCoast: Double,
         isDockedAtPort: Boolean
     ): MaritimeTerritorialWaters {
+        require(!nauticalMilesFromCoast.isNaN() && nauticalMilesFromCoast >= 0.0) {
+            "nauticalMilesFromCoast must be a non-negative finite number"
+        }
         return when {
             isDockedAtPort -> MaritimeTerritorialWaters.IN_PORT
             nauticalMilesFromCoast > 12.0 -> MaritimeTerritorialWaters.INTERNATIONAL_WATERS
