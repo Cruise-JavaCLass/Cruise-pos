@@ -158,4 +158,38 @@ class MaritimeTaxAndHappyHourTest {
         assertEquals(11.0, item.effectiveUnitPrice)
         assertEquals(11.0, item.itemSubtotal)
     }
+
+    @Test
+    fun testRejectInvalidGratuityRates() {
+        val cartItem = CartItem(id = "c1", menuItem = cocktailItem, quantity = 1)
+        val portPosition = VesselPosition(
+            latitude = 25.7617,
+            longitude = -80.1918,
+            navigationMode = VesselNavigationMode.PORT_DOCKED
+        )
+
+        // Negative gratuity rate
+        try {
+            MaritimeTaxCalculator.calculateBreakdown(listOf(cartItem), portPosition, gratuityRate = -0.05)
+            kotlin.test.fail("Expected IllegalArgumentException for negative gratuity rate")
+        } catch (e: IllegalArgumentException) {
+            assertTrue(e.message?.contains("non-negative") == true)
+        }
+
+        // Non-finite gratuity rate (Double.NaN)
+        try {
+            MaritimeTaxCalculator.calculateBreakdown(listOf(cartItem), portPosition, gratuityRate = Double.NaN)
+            kotlin.test.fail("Expected IllegalArgumentException for NaN gratuity rate")
+        } catch (e: IllegalArgumentException) {
+            assertTrue(e.message?.contains("finite") == true)
+        }
+
+        // Non-finite gratuity rate (Double.POSITIVE_INFINITY)
+        try {
+            MaritimeTaxCalculator.calculateBreakdown(listOf(cartItem), portPosition, gratuityRate = Double.POSITIVE_INFINITY)
+            kotlin.test.fail("Expected IllegalArgumentException for infinite gratuity rate")
+        } catch (e: IllegalArgumentException) {
+            assertTrue(e.message?.contains("finite") == true)
+        }
+    }
 }

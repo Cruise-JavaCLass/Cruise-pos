@@ -1,8 +1,10 @@
 package com.cruise.pos.shared.domain.model
 
+import kotlinx.datetime.Clock
+
 class CartHoldManager(
     private val maxHeldTabs: Int = 20,
-    private val clock: () -> Long = { 0L }
+    private val clock: () -> Long = { Clock.System.now().toEpochMilliseconds() }
 ) {
     private val heldTabs = mutableMapOf<String, CartHoldTab>()
     private var sequence = 0L
@@ -28,7 +30,7 @@ class CartHoldManager(
         val tab = CartHoldTab(
             tabId = resolvedTabId,
             guestIdentifier = guestIdentifier.trim(),
-            items = items,
+            items = items.toList(),
             createdAtEpochMs = timestampEpochMs,
             note = note.trim()
         )
