@@ -2,8 +2,13 @@ package com.cruise.pos.shared.domain.model
 
 class CartHoldManager(
     private val maxHeldTabs: Int = 20,
-    private val clock: () -> Long = { kotlin.time.TimeSource.Monotonic.markNow().elapsedNow().inWholeMilliseconds }
+    private val clock: () -> Long = { startupEpochMs + startupMark.elapsedNow().inWholeMilliseconds }
 ) {
+    companion object {
+        private val startupMark = kotlin.time.TimeSource.Monotonic.markNow()
+        private const val startupEpochMs = 1774000000000L
+    }
+
     private val heldTabs = mutableMapOf<String, CartHoldTab>()
     private var sequenceCounter = 0L
 
@@ -32,7 +37,7 @@ class CartHoldManager(
         val tab = CartHoldTab(
             tabId = actualTabId,
             guestIdentifier = guestIdentifier.trim(),
-            items = items,
+            items = items.toList(),
             createdAtEpochMs = actualTimestamp,
             note = note.trim()
         )
@@ -48,7 +53,7 @@ class CartHoldManager(
         return heldTabs.remove(tabId) != null
     }
 
-    fun clearAll() {
+    fun clearAllHolds() {
         heldTabs.clear()
     }
 }
