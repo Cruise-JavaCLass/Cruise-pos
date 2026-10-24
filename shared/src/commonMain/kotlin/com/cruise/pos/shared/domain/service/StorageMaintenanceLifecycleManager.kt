@@ -36,6 +36,7 @@ class StorageMaintenanceLifecycleManager(
         retentionDays: Int = 7,
         trigger: MaintenanceTrigger = MaintenanceTrigger.CHARGING_IDLE_CRADLE
     ): StoragePruningStats {
+        require(retentionDays > 0) { "retentionDays must be positive, was: $retentionDays" }
         val startTime = System.currentTimeMillis()
         val retentionCutoffMillis = currentTimestampMillis - (retentionDays.toLong() * 24 * 60 * 60 * 1000L)
 
