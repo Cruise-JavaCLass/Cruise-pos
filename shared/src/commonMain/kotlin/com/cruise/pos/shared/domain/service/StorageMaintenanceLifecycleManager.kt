@@ -78,9 +78,11 @@ class StorageMaintenanceLifecycleManager(
         recordsJson: String,
         encryptionKeyBytes: ByteArray,
         destination: String = "EXTERNAL_SD",
-        timestampMillis: Long = System.currentTimeMillis()
+        timestampMillis: Long = System.currentTimeMillis(),
+        ivBytes: ByteArray = ByteArray(16) { 0x42 }
     ): EncryptedArchiveBundle {
         require(encryptionKeyBytes.size == 32) { "AES-256 key must be exactly 32 bytes" }
+        require(ivBytes.size == 16) { "AES IV must be exactly 16 bytes" }
 
         // SHA-256 Checksum of raw records
         val md = MessageDigest.getInstance("SHA-256")
@@ -88,20 +90,22 @@ class StorageMaintenanceLifecycleManager(
         val checksumHex = checksumBytes.joinToString("") { "%02x".format(it) }
 
         // AES-256-CBC Encryption
-        val iv = ByteArray(16) { 0x42 } // Deterministic IV for archive verification
         val cipher = Cipher.getInstance("AES/CBC/PKCS5Padding")
         val secretKey = SecretKeySpec(encryptionKeyBytes, "AES")
-        cipher.init(Cipher.ENCRYPT_MODE, secretKey, IvParameterSpec(iv))
+        cipher.init(Cipher.ENCRYPT_MODE, secretKey, IvParameterSpec(ivBytes))
 
         val encryptedBytes = cipher.doFinal(recordsJson.toByteArray(Charsets.UTF_8))
         val encryptedBase64 = Base64.getEncoder().encodeToString(encryptedBytes)
 
-        val estimatedRecordCount = recordsJson.split("\"id\":").size - 1
+        val estimatedRecordCount = if (recordsJson.isBlank()) 0 else {
+            val matches = recordsJson.split("\"id\":").size - 1
+            matches.coerceAtLeast(0)
+        }
 
         return EncryptedArchiveBundle(
             archiveId = "ARCHIVE-$terminalId-$timestampMillis",
             terminalId = terminalId,
-            recordsCount = estimatedRecordCount.coerceAtLeast(1),
+            recordsCount = estimatedRecordCount,
             payloadChecksumSha256 = checksumHex,
             encryptedPayloadBase64 = encryptedBase64,
             targetDestination = destination,
@@ -116,40 +120,43 @@ class MockDatabaseCompactor(
     var mockLogsCount: Int = 300
 ) : DatabaseCompactor {
 
-    override fun executeVacuum(): Long {
-        simulatedDbSize = (simulatedDbSize * 0.65).toLong() // Reclaim ~35% on vacuum
-        return simulatedDbSize
-    }
-
-    override fun executeWalCheckpoint(): Boolean = true
-
     override fun pruneOldSyncedOrders(retentionCutoffMillis: Long): Int {
-        val pruned = (mockOrdersCount * 0.4).toInt()
+        val pruned = 450
         mockOrdersCount -= pruned
+        simulatedDbSize -= 15 * 1024 * 1024L // Reclaim 15MB
         return pruned
     }
 
     override fun pruneOldAuditLogs(retentionCutoffMillis: Long): Int {
-        val pruned = (mockLogsCount * 0.3).toInt()
+        val pruned = 85
         mockLogsCount -= pruned
+        simulatedDbSize -= 5 * 1024 * 1024L // Reclaim 5MB
         return pruned
+    }
+
+    override fun executeVacuum(): Long {
+        val reclaimed = 20 * 1024 * 1024L // Reclaim 20MB in defragmentation
+        simulatedDbSize -= reclaimed
+        return reclaimed
+    }
+
+    override fun executeWalCheckpoint(): Boolean {
+        return true
     }
 
     override fun getDatabaseSizeBytes(): Long = simulatedDbSize
 }
 
 class MockMediaDiskCacheCleaner(
-    private var simulatedCacheSize: Long = 280 * 1024 * 1024L // 280MB initial (exceeds 200MB)
+    private var currentCacheBytes: Long = 280 * 1024 * 1024L // 280MB initial
 ) : MediaDiskCacheCleaner {
 
     override fun pruneExpiredMedia(maxCacheSizeBytes: Long): Long {
-        if (simulatedCacheSize > maxCacheSizeBytes) {
-            val reclaimed = simulatedCacheSize - maxCacheSizeBytes
-            simulatedCacheSize = maxCacheSizeBytes
-            return reclaimed
-        }
-        return 0L
+        if (currentCacheBytes <= maxCacheSizeBytes) return 0L
+        val reclaimed = currentCacheBytes - maxCacheSizeBytes
+        currentCacheBytes = maxCacheSizeBytes
+        return reclaimed
     }
 
-    override fun getCurrentCacheSizeBytes(): Long = simulatedCacheSize
+    override fun getCurrentCacheSizeBytes(): Long = currentCacheBytes
 }

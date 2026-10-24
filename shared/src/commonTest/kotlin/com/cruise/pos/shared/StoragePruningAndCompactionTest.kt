@@ -29,8 +29,8 @@ class StoragePruningAndCompactionTest {
             trigger = MaintenanceTrigger.CHARGING_IDLE_CRADLE
         )
 
-        assertTrue(stats.ordersPrunedCount > 0)
-        assertTrue(stats.auditLogsPrunedCount > 0)
+        assertEquals(450, stats.ordersPrunedCount)
+        assertEquals(85, stats.auditLogsPrunedCount)
         assertTrue(stats.mediaCacheBytesReclaimed > 0) // Cleaned down to 200MB limit
         assertEquals(80 * 1024 * 1024L, stats.mediaCacheBytesReclaimed) // 280MB - 200MB = 80MB
         assertTrue(stats.databaseBytesBefore > stats.databaseBytesAfter)
@@ -73,5 +73,17 @@ class StoragePruningAndCompactionTest {
         val encryptedBytes = Base64.getDecoder().decode(bundle.encryptedPayloadBase64)
         val decryptedJson = String(cipher.doFinal(encryptedBytes), Charsets.UTF_8)
         assertEquals(sampleRecordsJson, decryptedJson)
+    }
+
+    @Test
+    fun testExportEncryptedAuditBundleEmptyRecordsCount() {
+        val bundle = manager.exportEncryptedAuditBundle(
+            terminalId = "TERM-POS-04",
+            recordsJson = "",
+            encryptionKeyBytes = ByteArray(32) { 0x07 },
+            destination = "USB_OTG",
+            timestampMillis = currentTimestampMillis
+        )
+        assertEquals(0, bundle.recordsCount)
     }
 }
