@@ -59,8 +59,8 @@ data class ConfiguredCartItem(
     val quantity: Int = 1
 ) {
     val unitPrice: Double
-        get() = menuItem.basePrice + selectedModifiers.sumOf { it.priceDelta }
+        get() = CatalogFilterUtils.calculateConfiguredPrice(menuItem.basePrice, selectedModifiers, 1)
 
     val totalPrice: Double
-        get() = unitPrice * quantity
+        get() = CatalogFilterUtils.calculateConfiguredPrice(menuItem.basePrice, selectedModifiers, quantity)
 }

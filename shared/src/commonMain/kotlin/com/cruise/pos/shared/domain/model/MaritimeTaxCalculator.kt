@@ -27,6 +27,9 @@ object MaritimeTaxCalculator {
         position: VesselPosition,
         gratuityRate: Double = 0.18
     ): CartTaxBreakdown {
+        require(gratuityRate.isFinite() && gratuityRate >= 0.0) {
+            "Gratuity rate must be finite and non-negative, but was $gratuityRate"
+        }
         val subtotalBeforeDiscount = items.sumOf { it.regularUnitPrice * it.quantity }
         val totalDiscount = items.sumOf { it.discountPerUnit * it.quantity }
         val taxableSubtotal = items.sumOf { it.itemSubtotal }
@@ -49,6 +52,6 @@ object MaritimeTaxCalculator {
     }
 
     private fun roundToCents(value: Double): Double {
-        return round(value * 100.0) / 100.0
+        return kotlin.math.floor(value * 100.0 + 0.5) / 100.0
     }
 }
