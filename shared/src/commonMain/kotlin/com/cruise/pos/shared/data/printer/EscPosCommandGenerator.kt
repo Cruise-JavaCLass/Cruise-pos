@@ -96,13 +96,15 @@ class EscPosCommandGenerator {
     ): EscPosCommandGenerator {
         val maxChars = width.charPerLine
         val spaceNeeded = maxChars - left.length - right.length
-        val line = if (spaceNeeded > 0) {
-            left + " ".repeat(spaceNeeded) + right
+        if (spaceNeeded > 0) {
+            textLine(left + " ".repeat(spaceNeeded) + right)
+        } else if (right.length >= maxChars) {
+            textLine(left)
+            textLine(right)
         } else {
-            // If overflowing, truncate or split
-            left.take(maxChars - right.length - 1) + " " + right
+            val maxLeft = (maxChars - right.length - 1).coerceAtLeast(0)
+            textLine(left.take(maxLeft) + " " + right)
         }
-        textLine(line)
         return this
     }
 
@@ -144,6 +146,7 @@ class EscPosCommandGenerator {
     }
 
     fun buildReceipt(receipt: ReceiptData): ByteArray {
+        buffer.clear()
         val width = receipt.paperWidth
 
         init()
@@ -222,8 +225,9 @@ class EscPosCommandGenerator {
     private fun formatCurrency(amount: Double): String {
         val isNegative = amount < 0
         val absAmount = if (isNegative) -amount else amount
-        val cents = ((absAmount * 100).toLong() % 100).toString().padStart(2, '0')
-        val dollars = (absAmount.toLong()).toString()
+        val totalCents = kotlin.math.round(absAmount * 100.0).toLong()
+        val dollars = totalCents / 100
+        val cents = (totalCents % 100).toString().padStart(2, '0')
         val prefix = if (isNegative) "-$" else "$"
         return "$prefix$dollars.$cents"
     }

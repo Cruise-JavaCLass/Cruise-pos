@@ -68,16 +68,28 @@ class ReceiptBitmapRenderer {
     ): ByteArray {
         val grid = Array(canvasHeightDots) { BooleanArray(canvasWidthDots) }
 
+        val isNormalized = strokes.flatten().all { it.first <= 1.0f && it.second <= 1.0f }
+        fun mapX(x: Float): Int = if (isNormalized) {
+            (x.coerceIn(0f, 1f) * (canvasWidthDots - 1)).toInt()
+        } else {
+            x.coerceIn(0f, (canvasWidthDots - 1).toFloat()).toInt()
+        }
+        fun mapY(y: Float): Int = if (isNormalized) {
+            (y.coerceIn(0f, 1f) * (canvasHeightDots - 1)).toInt()
+        } else {
+            y.coerceIn(0f, (canvasHeightDots - 1).toFloat()).toInt()
+        }
+
         for (stroke in strokes) {
             for (i in 0 until stroke.size - 1) {
                 val p1 = stroke[i]
                 val p2 = stroke[i + 1]
                 drawLine(
                     grid,
-                    x0 = (p1.first.coerceIn(0f, 1f) * (canvasWidthDots - 1)).toInt(),
-                    y0 = (p1.second.coerceIn(0f, 1f) * (canvasHeightDots - 1)).toInt(),
-                    x1 = (p2.first.coerceIn(0f, 1f) * (canvasWidthDots - 1)).toInt(),
-                    y1 = (p2.second.coerceIn(0f, 1f) * (canvasHeightDots - 1)).toInt(),
+                    x0 = mapX(p1.first),
+                    y0 = mapY(p1.second),
+                    x1 = mapX(p2.first),
+                    y1 = mapY(p2.second),
                     thickness = strokeThickness
                 )
             }

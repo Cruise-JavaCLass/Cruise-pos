@@ -86,6 +86,7 @@ class BluetoothSppManager(
                     Result.failure(IllegalStateException("Failed to establish RFCOMM SPP socket to ${device.address}"))
                 }
             } catch (e: Exception) {
+                if (e is kotlinx.coroutines.CancellationException) throw e
                 _connectionState = BluetoothConnectionState.ERROR
                 Result.failure(e)
             }

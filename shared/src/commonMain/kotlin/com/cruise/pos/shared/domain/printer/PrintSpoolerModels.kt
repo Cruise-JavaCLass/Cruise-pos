@@ -37,11 +37,11 @@ interface PrintSpoolerQueue {
     val activeJob: StateFlow<PrintJob?>
     val failedJobs: StateFlow<List<PrintJob>>
 
-    fun enqueueJob(job: PrintJob): Boolean
+    suspend fun enqueueJob(job: PrintJob): Boolean
     suspend fun processNextJob(): PrintJobResult
     fun updatePrinterHardwareStatus(status: PrinterDeviceStatus)
-    fun clearQueue()
-    fun retryFailedJob(jobId: String): Boolean
+    suspend fun clearQueue()
+    suspend fun retryFailedJob(jobId: String): Boolean
 }
 
 sealed class PrintJobResult {

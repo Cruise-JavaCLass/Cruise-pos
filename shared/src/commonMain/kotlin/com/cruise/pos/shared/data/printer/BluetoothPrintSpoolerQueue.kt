@@ -28,7 +28,7 @@ class BluetoothPrintSpoolerQueue(
     override val activeJob: StateFlow<PrintJob?> = _activeJob.asStateFlow()
     override val failedJobs: StateFlow<List<PrintJob>> = _failedJobs.asStateFlow()
 
-    override fun enqueueJob(job: PrintJob): Boolean {
+    override suspend fun enqueueJob(job: PrintJob): Boolean = mutex.withLock {
         pendingQueue.addLast(job.copy(status = PrintJobStatus.QUEUED))
         _queueSize.value = pendingQueue.size
         return true
@@ -38,16 +38,17 @@ class BluetoothPrintSpoolerQueue(
         _printerStatus.value = status
     }
 
-    override fun clearQueue() {
+    override suspend fun clearQueue(): Unit = mutex.withLock {
         pendingQueue.clear()
         _queueSize.value = 0
         _activeJob.value = null
     }
 
-    override fun retryFailedJob(jobId: String): Boolean {
+    override suspend fun retryFailedJob(jobId: String): Boolean = mutex.withLock {
         val failed = _failedJobs.value.firstOrNull { it.id == jobId } ?: return false
         _failedJobs.value = _failedJobs.value.filterNot { it.id == jobId }
-        enqueueJob(failed.copy(status = PrintJobStatus.QUEUED, errorMessage = null))
+        pendingQueue.addLast(failed.copy(status = PrintJobStatus.QUEUED, errorMessage = null))
+        _queueSize.value = pendingQueue.size
         return true
     }
 
@@ -82,10 +83,25 @@ class BluetoothPrintSpoolerQueue(
         _activeJob.value = job.copy(status = PrintJobStatus.PRINTING)
         _printerStatus.value = PrinterDeviceStatus.PRINTING
 
-        val written = socket.write(job.payload)
+        val written = try {
+            socket.write(job.payload)
+        } catch (e: Exception) {
+            _activeJob.value = null
+            _failedJobs.value = _failedJobs.value + job.copy(
+                status = PrintJobStatus.FAILED,
+                errorMessage = "Write failed: ${e.message}"
+            )
+            _printerStatus.value = PrinterDeviceStatus.ERROR
+            if (e is kotlinx.coroutines.CancellationException) {
+                throw e
+            }
+            return PrintJobResult.HardwareError(job.id, PrinterDeviceStatus.ERROR)
+        }
         return if (written) {
             _activeJob.value = null
-            _printerStatus.value = PrinterDeviceStatus.READY
+            if (_printerStatus.value == PrinterDeviceStatus.PRINTING) {
+                _printerStatus.value = PrinterDeviceStatus.READY
+            }
             PrintJobResult.Success(job.id)
         } else {
             handleFailedJob(job, "Socket write failed", PrintJobStatus.FAILED)
