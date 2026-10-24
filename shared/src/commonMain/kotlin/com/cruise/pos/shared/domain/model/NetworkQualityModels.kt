@@ -4,10 +4,10 @@ import kotlinx.serialization.Serializable
 
 @Serializable
 enum class NetworkHealthTier {
-    EXCELLENT_5GHZ_DECK, // Green (< 100ms, > 500kbps)
-    DEGRADED_SATELLITE,  // Yellow (100ms - 800ms, 50 - 500kbps)
-    HIGH_LATENCY_SAT,    // Orange (> 800ms, < 50kbps)
-    OFFLINE_DEAD_ZONE    // Red (No network / packet drop)
+    EXCELLENT_5GHZ_DECK, // Green (<= 120ms, >= 500kbps, >= -70 dBm)
+    DEGRADED_SATELLITE,  // Yellow (<= 800ms, >= 50kbps, >= -85 dBm)
+    HIGH_LATENCY_SAT,    // Orange (> 800ms or < 50kbps)
+    OFFLINE_DEAD_ZONE    // Red (No network / packet drop / <= -95 dBm)
 }
 
 @Serializable

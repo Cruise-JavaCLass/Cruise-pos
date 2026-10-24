@@ -65,9 +65,12 @@ class AdaptiveNetworkSyncEngine(
     ): AdaptiveSyncPolicy {
         val tier = evaluateHealthTier(latencyMillis, rssiDbm, bandwidthKbps, packetLossPercent)
 
-        // If offline or high-latency satellite, check for ship edge mesh gateway
+        // If offline or high-latency satellite, check for active ship edge mesh gateway
         val discoveredEdge = if (tier == NetworkHealthTier.OFFLINE_DEAD_ZONE || tier == NetworkHealthTier.HIGH_LATENCY_SAT) {
-            edgeGatewayDiscovery.getDiscoveredGateways().firstOrNull()
+            val now = timestampMillis
+            edgeGatewayDiscovery.getDiscoveredGateways()
+                .filter { now - it.discoveredAtMillis < 60_000L || it.discoveredAtMillis == 0L }
+                .minByOrNull { it.priority }
         } else {
             null
         }
@@ -170,12 +173,12 @@ class AdaptiveNetworkSyncEngine(
                 bos.toByteArray()
             }
             SyncCompressionMode.ULTRA_LOW_BANDWIDTH_BINARY -> {
-                // High compression GZIP + header stripped
+                // High compression GZIP with binary indicator prefix
                 val bos = ByteArrayOutputStream()
                 GZIPOutputStream(bos).use { gzip ->
                     gzip.write(rawBytes)
                 }
-                bos.toByteArray()
+                byteArrayOf(0x01.toByte()) + bos.toByteArray()
             }
         }
     }
@@ -190,16 +193,23 @@ interface EdgeGatewayDiscovery {
 class MockEdgeGatewayDiscovery(
     initialGateways: List<DiscoveredEdgeGateway> = emptyList()
 ) : EdgeGatewayDiscovery {
+    private val lock = Any()
     private val gateways = initialGateways.toMutableList()
 
-    override fun getDiscoveredGateways(): List<DiscoveredEdgeGateway> = gateways.toList()
+    override fun getDiscoveredGateways(): List<DiscoveredEdgeGateway> = synchronized(lock) {
+        gateways.toList()
+    }
 
     override fun registerGateway(gateway: DiscoveredEdgeGateway) {
-        gateways.removeAll { it.serviceName == gateway.serviceName }
-        gateways.add(gateway)
+        synchronized(lock) {
+            gateways.removeAll { it.serviceName == gateway.serviceName }
+            gateways.add(gateway)
+        }
     }
 
     override fun clearGateways() {
-        gateways.clear()
+        synchronized(lock) {
+            gateways.clear()
+        }
     }
 }

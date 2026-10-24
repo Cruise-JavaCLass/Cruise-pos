@@ -25,8 +25,8 @@ import com.cruise.pos.shared.domain.model.SyncGatewayType
 @Composable
 fun NetworkStatusBarLatencyPill(
     snapshot: NetworkQualitySnapshot,
-    onPillClick: () -> Unit = {},
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onPillClick: (() -> Unit)? = null
 ) {
     val pillBgColor by animateColorAsState(
         targetValue = when (snapshot.tier) {
@@ -66,7 +66,7 @@ fun NetworkStatusBarLatencyPill(
         shape = RoundedCornerShape(16.dp),
         modifier = modifier
             .clip(RoundedCornerShape(16.dp))
-            .clickable(onClick = onPillClick)
+            .then(if (onPillClick != null) Modifier.clickable(onClick = onPillClick) else Modifier)
             .border(1.dp, dotColor.copy(alpha = 0.5f), RoundedCornerShape(16.dp))
             .testTag("network_latency_pill")
     ) {
@@ -84,17 +84,18 @@ fun NetworkStatusBarLatencyPill(
 
             Spacer(modifier = Modifier.width(6.dp))
 
-            // Signal Meter bars (3-bar meter)
+            // Signal Meter bars (3-bar meter derived from RSSI with tier fallback)
             Row(
                 verticalAlignment = Alignment.Bottom,
                 horizontalArrangement = Arrangement.spacedBy(2.dp),
                 modifier = Modifier.height(10.dp)
             ) {
-                val barsFilled = when (snapshot.tier) {
-                    NetworkHealthTier.EXCELLENT_5GHZ_DECK -> 3
-                    NetworkHealthTier.DEGRADED_SATELLITE -> 2
-                    NetworkHealthTier.HIGH_LATENCY_SAT -> 1
-                    NetworkHealthTier.OFFLINE_DEAD_ZONE -> if (snapshot.activeGatewayType == SyncGatewayType.SHIP_EDGE_MESH_GATEWAY) 2 else 0
+                val barsFilled = when {
+                    snapshot.tier == NetworkHealthTier.OFFLINE_DEAD_ZONE && snapshot.activeGatewayType != SyncGatewayType.SHIP_EDGE_MESH_GATEWAY -> 0
+                    snapshot.rssiDbm >= -65 -> 3
+                    snapshot.rssiDbm >= -78 -> 2
+                    snapshot.rssiDbm >= -90 -> 1
+                    else -> 0
                 }
 
                 Box(
