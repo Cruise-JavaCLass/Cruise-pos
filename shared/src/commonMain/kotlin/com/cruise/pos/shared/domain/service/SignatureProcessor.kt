@@ -4,7 +4,9 @@ import com.cruise.pos.shared.domain.model.Point2D
 import com.cruise.pos.shared.domain.model.SignatureData
 import com.cruise.pos.shared.domain.model.SignatureVerificationResult
 import com.cruise.pos.shared.domain.model.Stroke
-import java.security.MessageDigest
+import kotlin.io.encoding.Base64
+import kotlin.io.encoding.ExperimentalEncodingApi
+import kotlin.math.abs
 
 class SignatureProcessor {
 
@@ -49,17 +51,19 @@ class SignatureProcessor {
 
     /**
      * Computes a SHA-256 non-repudiation audit hash over the signature's
-     * normalized stroke points coordinates, timestamp, and optional transaction/cabin context.
+     * normalized stroke points coordinates, timestamp, amount, and transaction/passenger context.
      */
     fun calculateAuditHash(
         strokes: List<Stroke>,
         timestampMillis: Long,
         transactionId: String = "",
-        passengerId: String = ""
+        passengerId: String = "",
+        amountCents: Long = 0L
     ): String {
-        val sb = java.lang.StringBuilder()
+        val sb = StringBuilder()
         sb.append("TX:").append(transactionId).append(";")
         sb.append("PID:").append(passengerId).append(";")
+        sb.append("AMT:").append(amountCents).append(";")
         sb.append("TIME:").append(timestampMillis).append(";")
         sb.append("STROKES:[")
 
@@ -67,28 +71,33 @@ class SignatureProcessor {
             sb.append("(")
             for (pt in stroke.points) {
                 // Round to 1 decimal place to normalize minor render floating point differences
-                sb.append(String.format(java.util.Locale.US, "%.1f,%.1f|", pt.x, pt.y))
+                val x10 = (pt.x * 10).toInt()
+                val y10 = (pt.y * 10).toInt()
+                sb.append("${x10 / 10}.${abs(x10 % 10)},${y10 / 10}.${abs(y10 % 10)}|")
             }
             sb.append(")")
         }
         sb.append("]")
 
-        val rawBytes = sb.toString().toByteArray(Charsets.UTF_8)
-        val md = MessageDigest.getInstance("SHA-256")
-        val digest = md.digest(rawBytes)
-        return digest.joinToString("") { "%02x".format(it) }
+        val rawBytes = sb.toString().encodeToByteArray()
+        return Sha256Digest.digest(rawBytes)
     }
 
     /**
      * Generates a compact mock PNG Base64 string from stroke data for network serialization.
      */
+    @OptIn(ExperimentalEncodingApi::class)
     fun exportToBase64Png(strokes: List<Stroke>): String {
         val strokeDataSummary = strokes.joinToString(";") { stroke ->
-            stroke.points.joinToString(",") { "${it.x.toInt()}:${it.y.toInt()}" }
+            stroke.points.joinToString(",") { pt ->
+                val x10 = (pt.x * 10).toInt()
+                val y10 = (pt.y * 10).toInt()
+                "${x10 / 10}.${abs(x10 % 10)}:${y10 / 10}.${abs(y10 % 10)}"
+            }
         }
         val mockPngHeader = "data:image/png;base64,"
-        val payload = "MOCK_PNG_DATA_FOR_STROKES:[$strokeDataSummary]".toByteArray(Charsets.UTF_8)
-        val base64Body = java.util.Base64.getEncoder().encodeToString(payload)
+        val payload = "MOCK_PNG_DATA_FOR_STROKES:[$strokeDataSummary]".encodeToByteArray()
+        val base64Body = Base64.Default.encode(payload)
         return mockPngHeader + base64Body
     }
 
@@ -99,19 +108,17 @@ class SignatureProcessor {
         strokes: List<Stroke>,
         timestampMillis: Long,
         transactionId: String,
-        passengerId: String
+        passengerId: String,
+        amountCents: Long = 0L
     ): SignatureData {
         val validation = validateSignature(strokes)
         require(validation.isValid) { validation.errorMessage ?: "Invalid signature" }
 
-        val hash = calculateAuditHash(strokes, timestampMillis, transactionId, passengerId)
+        val hash = calculateAuditHash(strokes, timestampMillis, transactionId, passengerId, amountCents)
         val base64 = exportToBase64Png(strokes)
 
         return SignatureData(
             strokes = strokes,
-            totalStrokeCount = strokes.size,
-            totalPointsCount = strokes.sumOf { it.points.size },
-            cumulativeLength = strokes.sumOf { it.totalLength.toDouble() }.toFloat(),
             base64Png = base64,
             sha256Hash = hash,
             timestampMillis = timestampMillis

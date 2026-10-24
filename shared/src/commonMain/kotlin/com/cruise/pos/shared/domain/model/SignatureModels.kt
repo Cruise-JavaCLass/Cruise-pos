@@ -33,15 +33,21 @@ data class Stroke(
 @Serializable
 data class SignatureData(
     val strokes: List<Stroke> = emptyList(),
-    val totalStrokeCount: Int = strokes.size,
-    val totalPointsCount: Int = strokes.sumOf { it.points.size },
-    val cumulativeLength: Float = strokes.sumOf { it.totalLength.toDouble() }.toFloat(),
     val base64Png: String? = null,
     val sha256Hash: String? = null,
     val timestampMillis: Long = 0L
 ) {
+    val totalStrokeCount: Int
+        get() = strokes.size
+
+    val totalPointsCount: Int
+        get() = strokes.sumOf { it.points.size }
+
+    val cumulativeLength: Float
+        get() = strokes.sumOf { it.totalLength.toDouble() }.toFloat()
+
     val isBlank: Boolean
-        get() = strokes.isEmpty() || cumulativeLength < MIN_SIGNATURE_LENGTH_PX || totalPointsCount < MIN_POINTS_COUNT
+        get() = cumulativeLength < MIN_SIGNATURE_LENGTH_PX || totalPointsCount < MIN_POINTS_COUNT
 
     companion object {
         const val MIN_SIGNATURE_LENGTH_PX = 40.0f

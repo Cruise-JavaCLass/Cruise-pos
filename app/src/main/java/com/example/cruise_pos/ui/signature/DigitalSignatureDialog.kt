@@ -11,7 +11,6 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
@@ -35,18 +34,20 @@ fun DigitalSignatureDialog(
     totalAmount: Double,
     onSignatureConfirmed: (SignatureData) -> Unit,
     onDismiss: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    passengerId: String = passengerName
 ) {
     val processor = remember { SignatureProcessor() }
     val strokes = remember { mutableStateListOf<Stroke>() }
-    var currentPoints = remember { mutableStateListOf<Point2D>() }
+    val currentPoints = remember { mutableStateListOf<Point2D>() }
     var errorMessage by remember { mutableStateOf<String?>(null) }
 
-    val cumulativeLength = strokes.sumOf { it.totalLength.toDouble() }.toFloat() +
-            Stroke(currentPoints.toList()).totalLength
-    val totalPoints = strokes.sumOf { it.points.size } + currentPoints.size
-    val isSignatureValid = cumulativeLength >= SignatureData.MIN_SIGNATURE_LENGTH_PX &&
-            totalPoints >= SignatureData.MIN_POINTS_COUNT
+    val isSignatureValid by remember {
+        derivedStateOf {
+            val allStrokes = strokes.toList() + if (currentPoints.isNotEmpty()) listOf(Stroke(currentPoints.toList())) else emptyList()
+            processor.validateSignature(allStrokes).isValid
+        }
+    }
 
     Card(
         shape = RoundedCornerShape(20.dp),
@@ -112,7 +113,8 @@ fun DigitalSignatureDialog(
                             detectDragGestures(
                                 onDragStart = { offset ->
                                     errorMessage = null
-                                    currentPoints = mutableStateListOf(Point2D(offset.x, offset.y))
+                                    currentPoints.clear()
+                                    currentPoints.add(Point2D(offset.x, offset.y))
                                 },
                                 onDrag = { change, _ ->
                                     change.consume()
@@ -121,11 +123,11 @@ fun DigitalSignatureDialog(
                                 onDragEnd = {
                                     if (currentPoints.isNotEmpty()) {
                                         strokes.add(Stroke(currentPoints.toList()))
-                                        currentPoints = mutableStateListOf()
+                                        currentPoints.clear()
                                     }
                                 },
                                 onDragCancel = {
-                                    currentPoints = mutableStateListOf()
+                                    currentPoints.clear()
                                 }
                             )
                         }
@@ -247,17 +249,13 @@ fun DigitalSignatureDialog(
                 Button(
                     onClick = {
                         val allStrokes = strokes.toList() + if (currentPoints.isNotEmpty()) listOf(Stroke(currentPoints.toList())) else emptyList()
-                        val validation = processor.validateSignature(allStrokes)
-                        if (!validation.isValid) {
-                            errorMessage = validation.errorMessage ?: "Signature cannot be blank"
-                            return@Button
-                        }
-
+                        val amountCents = (totalAmount * 100).toLong()
                         val result = processor.processSignature(
                             strokes = allStrokes,
                             timestampMillis = System.currentTimeMillis(),
                             transactionId = transactionId,
-                            passengerId = passengerName
+                            passengerId = passengerId,
+                            amountCents = amountCents
                         )
                         onSignatureConfirmed(result)
                     },
