@@ -53,35 +53,34 @@ fun MultiGuestSplitDrawer(
         ) {
             // Header
             Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 6.dp),
+                verticalAlignment = Alignment.Top
             ) {
-                Column {
-                    Text(
-                        text = "Split Folio By Guest",
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.Bold,
-                        modifier = Modifier.testTag("split_drawer_title")
-                    )
-                    Text(
-                        text = "Partition items across staterooms & guests",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-
-                OutlinedButton(
+                Text(
+                    text = "Split Folio By Guest",
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.ExtraBold,
+                    modifier = Modifier
+                        .weight(1f)
+                        .testTag("split_drawer_title")
+                )
+                Button(
                     onClick = onDismiss,
                     modifier = Modifier.testTag("close_split_drawer_btn")
                 ) {
-                    Text("Close")
+                    Text("Done")
                 }
             }
-
-            Spacer(modifier = Modifier.height(12.dp))
+            Text(
+                text = "Partition items across staterooms & guests",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.secondary
+            )
+            Spacer(modifier = Modifier.height(8.dp))
             Divider()
-            Spacer(modifier = Modifier.height(12.dp))
+            Spacer(modifier = Modifier.height(14.dp))
 
             // Guest Selector Chips / Tabs
             Text(
