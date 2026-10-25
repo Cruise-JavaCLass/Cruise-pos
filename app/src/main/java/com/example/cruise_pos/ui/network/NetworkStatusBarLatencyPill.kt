@@ -37,11 +37,11 @@ internal fun resolveDotColor(tier: NetworkHealthTier): Color = when (tier) {
 }
 
 internal fun resolveLabelText(snapshot: NetworkQualitySnapshot): String = when (snapshot.tier) {
-    NetworkHealthTier.EXCELLENT_5GHZ_DECK -> "${snapshot.latencyMillis}ms • 5GHz"
-    NetworkHealthTier.DEGRADED_SATELLITE -> "${snapshot.latencyMillis}ms • SAT"
+    NetworkHealthTier.EXCELLENT_5GHZ_DECK -> "${snapshot.latencyMillis}ms • EXCELLENT"
+    NetworkHealthTier.DEGRADED_SATELLITE -> "${snapshot.latencyMillis}ms • DEGRADED"
     NetworkHealthTier.HIGH_LATENCY_SAT -> when (snapshot.activeGatewayType) {
         SyncGatewayType.SHIP_EDGE_MESH_GATEWAY -> "EDGE MESH • ${snapshot.edgeGatewayHost ?: "LOCAL"}"
-        else -> "${snapshot.latencyMillis}ms • SLOW SAT"
+        else -> "${snapshot.latencyMillis}ms • HIGH LATENCY"
     }
     NetworkHealthTier.OFFLINE_DEAD_ZONE -> when (snapshot.activeGatewayType) {
         SyncGatewayType.SHIP_EDGE_MESH_GATEWAY -> "EDGE MESH • ${snapshot.edgeGatewayHost ?: "LOCAL"}"

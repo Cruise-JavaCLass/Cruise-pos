@@ -9,6 +9,7 @@ import com.cruise.pos.shared.domain.model.SyncGatewayType
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import java.io.ByteArrayOutputStream
 import java.util.zip.GZIPOutputStream
 
@@ -93,9 +94,18 @@ class AdaptiveNetworkSyncEngine(
             edgeGatewayHost = edgeHost,
             timestampMillis = timestampMillis
         )
-        _networkState.value = snapshot
+        var accepted = snapshot
+        _networkState.update { current ->
+            if (timestampMillis >= current.timestampMillis) {
+                accepted = snapshot
+                snapshot
+            } else {
+                accepted = current
+                current
+            }
+        }
 
-        return computeSyncPolicy(snapshot, discoveredEdge)
+        return computeSyncPolicy(accepted, discoveredEdge)
     }
 
     /**
@@ -106,7 +116,8 @@ class AdaptiveNetworkSyncEngine(
         edgeGateway: DiscoveredEdgeGateway? = null
     ): AdaptiveSyncPolicy {
         val targetHost = edgeGateway?.let { "${it.host}:${it.port}" } ?: snapshot.edgeGatewayHost
-        val hasEdgeGateway = edgeGateway != null || snapshot.activeGatewayType == SyncGatewayType.SHIP_EDGE_MESH_GATEWAY || !snapshot.edgeGatewayHost.isNullOrBlank()
+        val hasEdgeGateway = !targetHost.isNullOrBlank() &&
+            (edgeGateway != null || snapshot.activeGatewayType == SyncGatewayType.SHIP_EDGE_MESH_GATEWAY)
 
         return when (snapshot.tier) {
             NetworkHealthTier.EXCELLENT_5GHZ_DECK -> {
