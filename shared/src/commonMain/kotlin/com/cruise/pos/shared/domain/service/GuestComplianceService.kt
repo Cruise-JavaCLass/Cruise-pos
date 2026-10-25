@@ -19,6 +19,15 @@ class GuestComplianceService(
     private val defaultCashierId: String = "CASHIER-01"
 ) {
 
+    private val nonAlcoholicMarkers = listOf("non-alcoholic", "virgin mojito", "virgin colada", "virgin mary", "zero-proof")
+    private val alcoholKeywords = setOf(
+        "alcohol", "liquor", "cocktail", "wine", "beer", "spirit", "spirits",
+        "whiskey", "whisky", "vodka", "gin", "rum", "tequila", "champagne",
+        "bar_beverages"
+    )
+
+    private fun toCents(amount: Double): Long = kotlin.math.round(amount * 100.0).toLong()
+
     /**
      * Calculates passenger age against ship reference time and timezone.
      */
@@ -47,23 +56,11 @@ class GuestComplianceService(
         val lowerItem = itemName.lowercase()
         val lowerCategory = categoryId.lowercase()
 
-        // Explicit non-alcoholic guard
-        if (lowerItem.contains("non-alcoholic") ||
-            lowerItem.contains("virgin") ||
-            lowerItem.contains("zero-proof") ||
-            lowerCategory.contains("non-alcoholic")
-        ) {
-            return false
-        }
+        val combined = "$lowerCategory $lowerItem"
+        if (nonAlcoholicMarkers.any { it in combined }) return false
 
-        val tokens = "$lowerCategory $lowerItem".split(Regex("[^a-z0-9_]+")).filter { it.isNotBlank() }.toSet()
-        val alcoholKeywords = setOf(
-            "alcohol", "liquor", "cocktail", "wine", "beer", "spirits",
-            "whiskey", "whisky", "vodka", "gin", "rum", "tequila", "champagne",
-            "bar_beverages"
-        )
-
-        return tokens.any { it in alcoholKeywords }
+        val tokens = combined.split(Regex("[^a-z0-9_]+")).filter { it.isNotBlank() }.toSet()
+        return tokens.any { it in alcoholKeywords || it.removeSuffix("s") in alcoholKeywords }
     }
 
     /**
@@ -156,14 +153,15 @@ class GuestComplianceService(
         }
 
         // 4. Daily Allowance Limit Check (e.g. Parental controls)
-        if (passenger.dailyAllowanceLimit != null && passenger.dailySpentToday + purchaseAmount > passenger.dailyAllowanceLimit) {
+        val dailyAllowanceLimitCents = passenger.dailyAllowanceLimit?.let { toCents(it) }
+        if (dailyAllowanceLimitCents != null && toCents(passenger.dailySpentToday) + toCents(purchaseAmount) > dailyAllowanceLimitCents) {
             violations.add(PolicyViolationType.DAILY_ALLOWANCE_EXCEEDED)
             val availableDaily = (passenger.dailyAllowanceLimit - passenger.dailySpentToday).coerceAtLeast(0.0)
             reasons.add("PARENTAL LIMIT: Daily allowance limit exceeded. Daily Limit: \$${passenger.dailyAllowanceLimit}, Spent: \$${passenger.dailySpentToday}, Available: \$$availableDaily.")
         }
 
         // 5. Cabin Credit Limit Ceiling
-        if (cabinCredit.outstandingUnbilledBalance + purchaseAmount > cabinCredit.creditLimit) {
+        if (toCents(cabinCredit.outstandingUnbilledBalance) + toCents(purchaseAmount) > toCents(cabinCredit.creditLimit)) {
             violations.add(PolicyViolationType.CABIN_CREDIT_CEILING_REACHED)
             reasons.add("CREDIT CEILING: Cabin credit limit exceeded. Limit: \$${cabinCredit.creditLimit}, Unbilled: \$${cabinCredit.outstandingUnbilledBalance}, Available: \$${cabinCredit.availableCredit}.")
         }
