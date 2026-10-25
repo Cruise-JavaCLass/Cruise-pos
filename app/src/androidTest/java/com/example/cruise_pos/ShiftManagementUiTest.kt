@@ -9,10 +9,7 @@ import com.example.cruise_pos.ui.shift.CloseShiftDialog
 import com.example.cruise_pos.ui.shift.OpenShiftDialog
 import org.junit.Rule
 import org.junit.Test
-import org.junit.runner.RunWith
-import org.robolectric.RobolectricTestRunner
 
-@RunWith(RobolectricTestRunner::class)
 class ShiftManagementUiTest {
 
     @get:Rule

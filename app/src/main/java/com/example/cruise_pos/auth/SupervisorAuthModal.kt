@@ -124,9 +124,10 @@ fun SupervisorAuthModal(
                 }
 
                 // ── Error ─────────────────────────────────────────────────
-                if (state.errorMessage != null) {
+                val currentError = state.errorMessage
+                if (currentError != null) {
                     Text(
-                        text = state.errorMessage,
+                        text = currentError,
                         color = MaterialTheme.colorScheme.error,
                         style = MaterialTheme.typography.bodySmall,
                         modifier = Modifier

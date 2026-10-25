@@ -8,18 +8,15 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Rule
 import org.junit.Test
-import org.junit.runner.RunWith
-import org.robolectric.RobolectricTestRunner
 
-@RunWith(RobolectricTestRunner::class)
 class CatalogMenuUiTest {
 
     @get:Rule
     val composeTestRule = createComposeRule()
 
     private val sampleCategories = listOf(
-        MenuCategory("DRINKS", "Drinks", 2),
-        MenuCategory("FOOD", "Food", 1)
+        MenuCategory("DRINKS", "Drinks", displayOrder = 2),
+        MenuCategory("FOOD", "Food", displayOrder = 1)
     )
 
     private val sampleModifierGroup = ModifierGroup(
