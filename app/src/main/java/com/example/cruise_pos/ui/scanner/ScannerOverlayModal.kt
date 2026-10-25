@@ -20,12 +20,12 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.cruise_pos.R
 
 @Composable
 fun ScannerOverlayModal(
@@ -59,13 +59,10 @@ fun ScannerOverlayModal(
                     fontWeight = FontWeight.Bold,
                     fontFamily = FontFamily.Monospace
                 )
-                IconButton(
-                    onClick = onDismiss,
-                    modifier = Modifier.semantics { contentDescription = "Close scanner" }
-                ) {
+                IconButton(onClick = onDismiss) {
                     Icon(
                         imageVector = Icons.Default.Close,
-                        contentDescription = "Close scanner",
+                        contentDescription = stringResource(R.string.close_scanner),
                         tint = Color.White
                     )
                 }
