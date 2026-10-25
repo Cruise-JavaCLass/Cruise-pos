@@ -71,7 +71,12 @@ class InMemoryProductDao : ProductDao {
 
     override suspend fun upsertProducts(products: List<ProductEntity>) = mutex.withLock {
         val current = productsFlow.value.associateBy { it.id }.toMutableMap()
-        products.forEach { current[it.id] = it }
+        products.forEach { incoming ->
+            val existing = current[incoming.id]
+            if (existing == null || incoming.version >= existing.version) {
+                current[incoming.id] = incoming
+            }
+        }
         productsFlow.value = current.values.toList()
     }
 
