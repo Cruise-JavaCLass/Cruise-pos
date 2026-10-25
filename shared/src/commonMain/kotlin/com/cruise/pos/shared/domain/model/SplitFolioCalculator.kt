@@ -38,7 +38,9 @@ object SplitFolioCalculator {
 
         val totalSubtotal = roundToCents(guestSubtotals.values.sum())
         if (totalSubtotal == 0.0) {
-            return order.guestAssignments.map { assignment ->
+            return order.guestAssignments
+                .filter { roundToCents(it.customTipAmount) > 0.0 }
+                .map { assignment ->
                 GuestSplitChargeBreakdown(
                     guestId = assignment.guest.guestId,
                     guestName = assignment.guest.guestName,

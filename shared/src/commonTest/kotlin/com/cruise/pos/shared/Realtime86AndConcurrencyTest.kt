@@ -113,6 +113,32 @@ class Realtime86AndConcurrencyTest {
     }
 
     @Test
+    fun testCartInventoryGuardAggregatesDemandAcrossMultipleCartLines() = runTest {
+        val sseClient = SseGalleyStockEventClient()
+        val repository = InventoryCatalogRepository(
+            eventClient = sseClient,
+            initialItems = listOf(specialSteak.copy(stockQuota = 5)),
+            scope = backgroundScope
+        )
+        val guard = CartInventoryGuard(repository)
+
+        val cart = listOf(
+            CartItem(id = "c1", menuItem = specialSteak, quantity = 3),
+            CartItem(id = "c2", menuItem = specialSteak, quantity = 3)
+        )
+
+        val result = guard.validateCartBeforeTender(cart)
+        assertIs<CartInventoryValidationResult.DepletedItemsDetected>(result)
+        val issues = (result as CartInventoryValidationResult.DepletedItemsDetected).invalidItems
+        assertEquals(1, issues.size)
+        assertEquals("STEAK-01", issues.first().menuItemId)
+        assertEquals(6, issues.first().requestedQuantity)
+        assertEquals(5, issues.first().remainingStock)
+
+        repository.stopSync()
+    }
+
+    @Test
     fun testConcurrentStockDecrementPreventsOverAllocation() = runTest {
         val sseClient = SseGalleyStockEventClient()
         val repository = InventoryCatalogRepository(

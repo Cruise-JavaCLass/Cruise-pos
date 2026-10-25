@@ -52,7 +52,7 @@ class SplitFolioBillingRepository {
         val chargeRequests = breakdowns.map { item ->
             val sig = signatureMap[item.guestId]
                 ?: throw IllegalArgumentException("Missing required signature for guest ${item.guestId}")
-            val idempotencyKey = "IDEMP-SPLIT-$orderId-${item.folioId}"
+            val idempotencyKey = "IDEMP-SPLIT-$orderId-${item.folioId}-${item.guestId}"
             CabinChargeRequest(
                 idempotencyKey = idempotencyKey,
                 guestId = item.guestId,

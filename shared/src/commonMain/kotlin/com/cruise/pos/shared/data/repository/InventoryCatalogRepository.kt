@@ -84,10 +84,7 @@ class InventoryCatalogRepository(
 
         val targetItem = currentList[itemIndex]
         val updatedItem = when (event.updateType) {
-            StockUpdateType.ITEM_86ED -> targetItem.copy(
-                isAvailable = false,
-                stockQuota = 0
-            )
+            StockUpdateType.ITEM_86ED -> targetItem.copy(isAvailable = false)
             StockUpdateType.ITEM_RESTOCKED -> targetItem.copy(
                 isAvailable = true,
                 stockQuota = event.remainingQuota ?: targetItem.stockQuota

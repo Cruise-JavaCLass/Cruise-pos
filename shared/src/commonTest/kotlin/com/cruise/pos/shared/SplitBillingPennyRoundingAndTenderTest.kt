@@ -148,4 +148,60 @@ class SplitBillingPennyRoundingAndTenderTest {
         assertEquals(2, success.processedChargesCount)
         assertTrue(success.totalAmountBilled > 0)
     }
+
+    @Test
+    fun testSplitFolioValidationAndEdgeCases() {
+        val repo = SplitFolioBillingRepository()
+        val cartItems = listOf(CartItem(id = "c1", menuItem = pizzaItem, quantity = 1))
+
+        // Unknown item ID throws
+        val invalidOrder = MultiGuestSplitOrder(
+            orderId = "ORD-ERR-1",
+            originalItems = cartItems,
+            guestAssignments = listOf(
+                GuestSplitAssignment(guest = guest1, assignedItemIds = listOf("unknown_id"))
+            )
+        )
+        kotlin.test.assertFailsWith<IllegalArgumentException> {
+            SplitFolioCalculator.calculateSplitBreakdown(invalidOrder)
+        }
+
+        // Negative custom tip throws
+        val negativeTipOrder = MultiGuestSplitOrder(
+            orderId = "ORD-ERR-2",
+            originalItems = cartItems,
+            guestAssignments = listOf(
+                GuestSplitAssignment(guest = guest1, assignedItemIds = listOf("c1"), customTipAmount = -5.0)
+            )
+        )
+        kotlin.test.assertFailsWith<IllegalArgumentException> {
+            SplitFolioCalculator.calculateSplitBreakdown(negativeTipOrder)
+        }
+
+        // Missing signature throws in buildBatchPayload
+        val validOrder = MultiGuestSplitOrder(
+            orderId = "ORD-OK-1",
+            originalItems = cartItems,
+            guestAssignments = listOf(
+                GuestSplitAssignment(guest = guest1, assignedItemIds = listOf("c1"), customTipAmount = 0.0)
+            )
+        )
+        val breakdowns = SplitFolioCalculator.calculateSplitBreakdown(validOrder)
+        kotlin.test.assertFailsWith<IllegalArgumentException> {
+            repo.buildBatchPayload("ORD-OK-1", breakdowns, emptyMap(), 1000L)
+        }
+
+        // Zero total subtotal with zero tip omits zero-charge guests
+        val zeroSubtotalOrder = MultiGuestSplitOrder(
+            orderId = "ORD-ZERO",
+            originalItems = emptyList(),
+            guestAssignments = listOf(
+                GuestSplitAssignment(guest = guest1, assignedItemIds = emptyList(), customTipAmount = 0.0),
+                GuestSplitAssignment(guest = guest2, assignedItemIds = emptyList(), customTipAmount = 5.0)
+            )
+        )
+        val zeroBreakdowns = SplitFolioCalculator.calculateSplitBreakdown(zeroSubtotalOrder)
+        assertEquals(1, zeroBreakdowns.size)
+        assertEquals(guest2.guestId, zeroBreakdowns.first().guestId)
+    }
 }

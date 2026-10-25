@@ -14,6 +14,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.DialogProperties
 import com.cruise.pos.shared.domain.model.GuestSplitChargeBreakdown
 
 @Composable
@@ -36,6 +37,10 @@ fun SequentialGuestTenderDialog(
 
     AlertDialog(
         onDismissRequest = onCancel,
+        properties = DialogProperties(
+            dismissOnClickOutside = false,
+            usePlatformDefaultWidth = false
+        ),
         modifier = modifier
             .fillMaxWidth(0.95f)
             .testTag("sequential_guest_tender_dialog"),
