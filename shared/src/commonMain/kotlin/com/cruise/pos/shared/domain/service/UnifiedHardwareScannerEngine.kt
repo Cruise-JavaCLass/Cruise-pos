@@ -30,7 +30,8 @@ interface UnifiedBarcodeScanner {
 class UnifiedHardwareScannerEngine(
     initialConfig: HardwareScannerConfig = HardwareScannerConfig(),
     private val feedbackController: HardwareFeedbackController = MockHardwareFeedbackController(),
-    private val currentTimeMillisProvider: () -> Long = { System.currentTimeMillis() }
+    private val currentTimeMillisProvider: () -> Long = { System.currentTimeMillis() },
+    private val monotonicTimeMillisProvider: () -> Long = { kotlin.time.TimeSource.Monotonic.markNow().elapsedNow().inWholeMilliseconds }
 ) : UnifiedBarcodeScanner {
 
     private val _config = MutableStateFlow(initialConfig)
@@ -84,8 +85,9 @@ class UnifiedHardwareScannerEngine(
         if (!detectedBarcode.isNullOrBlank()) {
             val timestamp = (extrasMap["timestamp"] as? Long) ?: 0L
             val arrivalTime = currentTimeMillisProvider()
+            val monotonicArrival = monotonicTimeMillisProvider()
             val effectiveTimestamp = if (timestamp > 0L) timestamp else arrivalTime
-            handleCleanedBarcode(detectedBarcode, detectedSymbology, deviceType, effectiveTimestamp, arrivalTime)
+            handleCleanedBarcode(detectedBarcode, detectedSymbology, deviceType, effectiveTimestamp, monotonicArrival)
             return true
         }
         return false
@@ -93,8 +95,9 @@ class UnifiedHardwareScannerEngine(
 
     override fun simulateHardwareScan(barcode: String, symbology: String, timestampMillis: Long) {
         val arrivalTime = currentTimeMillisProvider()
+        val monotonicArrival = monotonicTimeMillisProvider()
         val effectiveTimestamp = if (timestampMillis > 0L) timestampMillis else arrivalTime
-        handleCleanedBarcode(barcode, symbology, _config.value.enabledDeviceType, effectiveTimestamp, arrivalTime)
+        handleCleanedBarcode(barcode, symbology, _config.value.enabledDeviceType, effectiveTimestamp, monotonicArrival)
     }
 
     private fun handleCleanedBarcode(
@@ -102,18 +105,18 @@ class UnifiedHardwareScannerEngine(
         symbology: String,
         deviceType: ScannerDeviceType,
         timestampMillis: Long,
-        arrivalTimeMillis: Long
+        monotonicArrivalTimeMillis: Long
     ) {
         val cfg = _config.value
 
         var isDuplicate = false
         lastScanState.update { current ->
-            if (current != null && current.first == rawBarcode && (arrivalTimeMillis - current.second) < cfg.duplicateScanCooldownMillis) {
+            if (current != null && current.first == rawBarcode && (monotonicArrivalTimeMillis - current.second) < cfg.duplicateScanCooldownMillis) {
                 isDuplicate = true
                 current
             } else {
                 isDuplicate = false
-                rawBarcode to arrivalTimeMillis
+                rawBarcode to monotonicArrivalTimeMillis
             }
         }
         if (isDuplicate) {

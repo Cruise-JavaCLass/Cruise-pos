@@ -103,7 +103,8 @@ class HardwareScannerThroughputTest {
                 duplicateScanCooldownMillis = 100L
             ),
             feedbackController = timedFeedback,
-            currentTimeMillisProvider = { simulatedTime }
+            currentTimeMillisProvider = { simulatedTime },
+            monotonicTimeMillisProvider = { simulatedTime }
         )
 
         val p1 = timedEngine.processRawBroadcastIntent(
@@ -171,5 +172,39 @@ class HardwareScannerThroughputTest {
         assertTrue(handled)
         assertEquals(initialBeeps, feedbackController.beepCount)
         assertEquals(initialHaptics, feedbackController.hapticCount)
+    }
+
+    @Test
+    fun duplicateCooldown_notSuppressedWhenWallClockRollsBack() = runTest {
+        var wallClock = 10000L
+        var monotonicClock = 1000L
+        val timedFeedback = MockHardwareFeedbackController()
+        val timedEngine = UnifiedHardwareScannerEngine(
+            initialConfig = HardwareScannerConfig(
+                enabledDeviceType = ScannerDeviceType.SUNMI_BUILTIN_LASER,
+                duplicateScanCooldownMillis = 100L
+            ),
+            feedbackController = timedFeedback,
+            currentTimeMillisProvider = { wallClock },
+            monotonicTimeMillisProvider = { monotonicClock }
+        )
+
+        val p1 = timedEngine.processRawBroadcastIntent(
+            action = UnifiedHardwareScannerEngine.SUNMI_ACTION_SCAN,
+            extrasMap = mapOf("data" to "ROLLBACK-CHECK")
+        )
+        assertTrue(p1)
+        val initialBeepCount = timedFeedback.beepCount
+
+        // Wall clock jumps backward into the past, but monotonic clock advances past cooldown window
+        wallClock -= 5000L
+        monotonicClock += 200L
+
+        val p2 = timedEngine.processRawBroadcastIntent(
+            action = UnifiedHardwareScannerEngine.SUNMI_ACTION_SCAN,
+            extrasMap = mapOf("data" to "ROLLBACK-CHECK")
+        )
+        assertTrue(p2)
+        assertEquals(initialBeepCount + 1, timedFeedback.beepCount)
     }
 }
