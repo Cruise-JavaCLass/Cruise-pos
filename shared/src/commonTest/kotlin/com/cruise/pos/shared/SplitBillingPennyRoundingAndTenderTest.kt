@@ -131,7 +131,7 @@ class SplitBillingPennyRoundingAndTenderTest {
             guest2.guestId to "svg_sig_bob"
         )
 
-        val batchPayload = repo.buildBatchPayload("ORD-SPLIT-402", breakdowns, signatureMap)
+        val batchPayload = repo.buildBatchPayload("ORD-SPLIT-402", breakdowns, signatureMap, 1774268000000L)
         assertEquals("ORD-SPLIT-402", batchPayload.batchOrderId)
         assertEquals(2, batchPayload.charges.size)
 

@@ -90,7 +90,7 @@ class InventoryCatalogRepository(
             )
             StockUpdateType.ITEM_RESTOCKED -> targetItem.copy(
                 isAvailable = true,
-                stockQuota = event.remainingQuota
+                stockQuota = event.remainingQuota ?: targetItem.stockQuota
             )
             StockUpdateType.QUOTA_COUNTDOWN -> {
                 val newQuota = event.remainingQuota ?: targetItem.stockQuota
