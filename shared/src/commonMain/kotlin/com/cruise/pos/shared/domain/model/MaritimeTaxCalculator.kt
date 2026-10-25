@@ -21,7 +21,6 @@ object MaritimeTaxCalculator {
 
     /**
      * Calculates tax, gratuity, and totals with exact currency rounding to cents (2 decimal places).
-
      *
      * @throws IllegalArgumentException if [gratuityRate] is negative or non-finite.
      */
@@ -31,11 +30,6 @@ object MaritimeTaxCalculator {
         gratuityRate: Double = 0.18
     ): CartTaxBreakdown {
         require(gratuityRate.isFinite() && gratuityRate >= 0.0) {
-            "Gratuity rate must be finite and non-negative, but was $gratuityRate"
-        }
-        val subtotalBeforeDiscount = items.sumOf { it.regularUnitPrice * it.quantity }
-        val totalDiscount = items.sumOf { it.discountPerUnit * it.quantity }
-
             "gratuityRate must be a finite non-negative value, got $gratuityRate"
         }
 

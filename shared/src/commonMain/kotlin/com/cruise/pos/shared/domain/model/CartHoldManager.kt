@@ -1,9 +1,5 @@
 package com.cruise.pos.shared.domain.model
 
-class CartHoldManager(
-    private val maxHeldTabs: Int = 20,
-    private val clock: () -> Long = { 0L }
-
 import kotlinx.datetime.Clock
 
 class CartHoldManager(
@@ -34,7 +30,6 @@ class CartHoldManager(
         val tab = CartHoldTab(
             tabId = resolvedTabId,
             guestIdentifier = guestIdentifier.trim(),
-            items = items,
             items = items.toList(),
             createdAtEpochMs = timestampEpochMs,
             note = note.trim()

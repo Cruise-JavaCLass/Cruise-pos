@@ -41,8 +41,6 @@ data class CartItem(
         get() = effectiveUnitPrice * quantity
 
     val totalDiscount: Double
-        get() = discountPerUnit * quantity
-
         get() = (regularUnitPrice - effectiveUnitPrice) * quantity
 }
 
