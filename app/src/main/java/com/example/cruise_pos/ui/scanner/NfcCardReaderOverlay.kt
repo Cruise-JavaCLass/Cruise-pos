@@ -38,35 +38,12 @@ fun NfcCardReaderOverlay(
         }
     }
 
-    Box(
+    ScannerOverlayModal(
+        title = "RFID / NFC CARD READER",
+        onDismiss = onDismiss,
         modifier = modifier
-            .fillMaxSize()
-            .background(Color.Black.copy(alpha = 0.85f))
-            .padding(24.dp),
-        contentAlignment = Alignment.Center
     ) {
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = "RFID / NFC CARD READER",
-                    color = Color.White,
-                    fontSize = 18.sp,
-                    fontWeight = FontWeight.Bold,
-                    fontFamily = FontFamily.Monospace
-                )
-                IconButton(onClick = onDismiss) {
-                    Text("✕", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold)
-                }
-            }
-
-            Spacer(modifier = Modifier.height(24.dp))
+        Spacer(modifier = Modifier.height(24.dp))
 
             // Animated NFC Contactless Target
             Box(
@@ -145,6 +122,5 @@ fun NfcCardReaderOverlay(
                     Text("Tap Robert Langdon (Reported Lost)", color = Color(0xFFFCA5A5))
                 }
             }
-        }
     }
 }

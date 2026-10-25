@@ -38,36 +38,12 @@ fun CameraXScanningViewfinder(
         }
     }
 
-    Box(
+    ScannerOverlayModal(
+        title = "GUEST CARD SCANNER",
+        onDismiss = onDismiss,
         modifier = modifier
-            .fillMaxSize()
-            .background(Color.Black.copy(alpha = 0.85f))
-            .padding(24.dp),
-        contentAlignment = Alignment.Center
     ) {
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            // Header
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = "GUEST CARD SCANNER",
-                    color = Color.White,
-                    fontSize = 18.sp,
-                    fontWeight = FontWeight.Bold,
-                    fontFamily = FontFamily.Monospace
-                )
-                IconButton(onClick = onDismiss) {
-                    Text("✕", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold)
-                }
-            }
-
-            Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(16.dp))
 
             Text(
                 text = "Align cruise card QR barcode or cabin pass inside viewfinder",
@@ -186,6 +162,5 @@ fun CameraXScanningViewfinder(
             ) {
                 Text("Process Code", fontWeight = FontWeight.Bold)
             }
-        }
     }
 }

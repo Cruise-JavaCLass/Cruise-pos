@@ -137,7 +137,7 @@ class GuestCardRecognitionService(
         }
 
         // Folio limit check
-        if (guest.availableSpendingLimit < purchaseAmount) {
+        if (!guest.availableSpendingLimit.isFinite() || guest.availableSpendingLimit < purchaseAmount) {
             return PurchaseAuthorizationResult(
                 isAuthorized = false,
                 guest = guest,
