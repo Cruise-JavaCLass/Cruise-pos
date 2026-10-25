@@ -3,6 +3,7 @@ package com.cruise.pos.shared
 import com.cruise.pos.shared.domain.model.Point2D
 import com.cruise.pos.shared.domain.model.SignatureData
 import com.cruise.pos.shared.domain.model.Stroke
+import com.cruise.pos.shared.domain.service.Sha256Digest
 import com.cruise.pos.shared.domain.service.SignatureProcessor
 import kotlin.test.Test
 import kotlin.test.assertEquals

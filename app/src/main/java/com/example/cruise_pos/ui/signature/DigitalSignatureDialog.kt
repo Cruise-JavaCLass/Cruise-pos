@@ -249,7 +249,7 @@ fun DigitalSignatureDialog(
                 Button(
                     onClick = {
                         val allStrokes = strokes.toList() + if (currentPoints.isNotEmpty()) listOf(Stroke(currentPoints.toList())) else emptyList()
-                        val amountCents = (totalAmount * 100).toLong()
+                        val amountCents = Math.round(totalAmount * 100)
                         val result = processor.processSignature(
                             strokes = allStrokes,
                             timestampMillis = System.currentTimeMillis(),
