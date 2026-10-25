@@ -42,6 +42,8 @@ data class CartItem(
 
     val totalDiscount: Double
         get() = discountPerUnit * quantity
+
+        get() = (regularUnitPrice - effectiveUnitPrice) * quantity
 }
 
 @Serializable

@@ -21,6 +21,9 @@ object MaritimeTaxCalculator {
 
     /**
      * Calculates tax, gratuity, and totals with exact currency rounding to cents (2 decimal places).
+
+     *
+     * @throws IllegalArgumentException if [gratuityRate] is negative or non-finite.
      */
     fun calculateBreakdown(
         items: List<CartItem>,
@@ -32,6 +35,12 @@ object MaritimeTaxCalculator {
         }
         val subtotalBeforeDiscount = items.sumOf { it.regularUnitPrice * it.quantity }
         val totalDiscount = items.sumOf { it.discountPerUnit * it.quantity }
+
+            "gratuityRate must be a finite non-negative value, got $gratuityRate"
+        }
+
+        val subtotalBeforeDiscount = items.sumOf { it.regularUnitPrice * it.quantity }
+        val totalDiscount = items.sumOf { (it.regularUnitPrice - it.effectiveUnitPrice) * it.quantity }
         val taxableSubtotal = items.sumOf { it.itemSubtotal }
 
         val taxRate = resolveTaxRate(position)

@@ -158,4 +158,73 @@ class MaritimeTaxAndHappyHourTest {
         assertEquals(11.0, item.effectiveUnitPrice)
         assertEquals(11.0, item.itemSubtotal)
     }
+
+    @Test
+    fun testRejectInvalidGratuityRates() {
+        val cartItem = CartItem(id = "c1", menuItem = cocktailItem, quantity = 1)
+        val portPosition = VesselPosition(
+            latitude = 25.7617,
+            longitude = -80.1918,
+            navigationMode = VesselNavigationMode.PORT_DOCKED
+        )
+
+        // Negative gratuity rate
+        try {
+            MaritimeTaxCalculator.calculateBreakdown(listOf(cartItem), portPosition, gratuityRate = -0.05)
+            kotlin.test.fail("Expected IllegalArgumentException for negative gratuity rate")
+        } catch (e: IllegalArgumentException) {
+            assertTrue(e.message?.contains("non-negative") == true)
+        }
+
+        // Non-finite gratuity rate (Double.NaN)
+        try {
+            MaritimeTaxCalculator.calculateBreakdown(listOf(cartItem), portPosition, gratuityRate = Double.NaN)
+            kotlin.test.fail("Expected IllegalArgumentException for NaN gratuity rate")
+        } catch (e: IllegalArgumentException) {
+            assertTrue(e.message?.contains("finite") == true)
+        }
+
+        // Non-finite gratuity rate (Double.POSITIVE_INFINITY)
+        try {
+            MaritimeTaxCalculator.calculateBreakdown(listOf(cartItem), portPosition, gratuityRate = Double.POSITIVE_INFINITY)
+            kotlin.test.fail("Expected IllegalArgumentException for infinite gratuity rate")
+        } catch (e: IllegalArgumentException) {
+            assertTrue(e.message?.contains("finite") == true)
+        }
+    }
+
+    @Test
+    fun testExcessiveDiscountCappedAtRegularPriceAndReconcilesBreakdown() {
+        val discountedBeyondZero = CartItem(
+            id = "c-excess",
+            menuItem = cocktailItem,
+            quantity = 2,
+            discountPerUnit = 20.0
+        )
+
+        assertEquals(12.0, discountedBeyondZero.regularUnitPrice)
+        assertEquals(0.0, discountedBeyondZero.effectiveUnitPrice)
+        assertEquals(0.0, discountedBeyondZero.itemSubtotal)
+        assertEquals(24.0, discountedBeyondZero.totalDiscount)
+
+        val portPosition = VesselPosition(
+            latitude = 25.7617,
+            longitude = -80.1918,
+            navigationMode = VesselNavigationMode.PORT_DOCKED,
+            currentPortName = "PortMiami"
+        )
+
+        val breakdown = MaritimeTaxCalculator.calculateBreakdown(
+            items = listOf(discountedBeyondZero),
+            position = portPosition
+        )
+
+        assertEquals(24.0, breakdown.subtotalBeforeDiscount)
+        assertEquals(24.0, breakdown.totalDiscount)
+        assertEquals(0.0, breakdown.taxableSubtotal)
+        assertEquals(0.0, breakdown.taxAmount)
+        assertEquals(0.0, breakdown.gratuityAmount)
+        assertEquals(0.0, breakdown.grandTotal)
+        assertEquals(breakdown.subtotalBeforeDiscount - breakdown.totalDiscount, breakdown.taxableSubtotal)
+    }
 }

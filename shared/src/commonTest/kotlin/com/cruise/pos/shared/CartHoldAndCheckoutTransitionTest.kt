@@ -89,4 +89,38 @@ class CartHoldAndCheckoutTransitionTest {
         assertTrue(discarded)
         assertNull(holdManager.recallOrder(tab.tabId))
     }
+
+
+    @Test
+    fun testHoldOrderUsesRealClockByDefault() {
+        val holdManager = CartHoldManager()
+        val cartItems = listOf(CartItem(id = "item-1", menuItem = sampleItem1, quantity = 1))
+
+        val tab = holdManager.holdOrder(
+            guestIdentifier = "Cabin-101",
+            items = cartItems
+        )
+
+        // Epoch ms should be non-zero and reasonable (greater than year 2024 timestamp 1700000000000L)
+        assertTrue(tab.createdAtEpochMs > 1700000000000L, "Default clock should generate real epoch ms, got ${tab.createdAtEpochMs}")
+    }
+
+    @Test
+    fun testMutatingOriginalListDoesNotAffectHeldTab() {
+        val holdManager = CartHoldManager()
+        val mutableItems = mutableListOf(CartItem(id = "item-1", menuItem = sampleItem1, quantity = 1))
+
+        val tab = holdManager.holdOrder(
+            guestIdentifier = "Cabin-102",
+            items = mutableItems
+        )
+
+        // Caller mutates their list after parking
+        mutableItems.clear()
+
+        assertEquals(1, tab.items.size)
+        val recalled = holdManager.recallOrder(tab.tabId)
+        assertNotNull(recalled)
+        assertEquals(1, recalled.items.size)
+    }
 }
