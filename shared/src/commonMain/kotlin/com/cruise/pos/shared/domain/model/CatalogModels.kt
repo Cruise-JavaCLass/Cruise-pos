@@ -28,9 +28,11 @@ data class MenuItem(
     val basePrice: Double,
     val imageUrl: String? = null,
     val isAvailable: Boolean = true, // If false, item is 86'd / out-of-stock
+    val stockQuota: Int? = null,     // Null if unlimited, non-null for countdown tracking
     val modifierGroups: List<ModifierGroup> = emptyList()
 ) {
-    val is86ed: Boolean get() = !isAvailable
+    val is86ed: Boolean get() = !isAvailable || (stockQuota != null && stockQuota <= 0)
+    val isLowStock: Boolean get() = !is86ed && stockQuota != null && stockQuota in 1..5
 }
 
 @Serializable
@@ -57,8 +59,8 @@ data class ConfiguredCartItem(
     val quantity: Int = 1
 ) {
     val unitPrice: Double
-        get() = menuItem.basePrice + selectedModifiers.sumOf { it.priceDelta }
+        get() = CatalogFilterUtils.calculateConfiguredPrice(menuItem.basePrice, selectedModifiers, 1)
 
     val totalPrice: Double
-        get() = unitPrice * quantity
+        get() = CatalogFilterUtils.calculateConfiguredPrice(menuItem.basePrice, selectedModifiers, quantity)
 }

@@ -90,6 +90,7 @@ class CartHoldAndCheckoutTransitionTest {
         assertNull(holdManager.recallOrder(tab.tabId))
     }
 
+
     @Test
     fun testHoldOrderUsesRealClockByDefault() {
         val holdManager = CartHoldManager()
