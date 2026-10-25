@@ -80,7 +80,9 @@ data class ShiftZReport(
     val totalNetRevenue: Double,
     val totalOrdersCount: Int,
     val paymentBreakdowns: List<PaymentMethodBreakdown>,
-    val backendLedgerSyncStatus: LedgerSyncStatus = LedgerSyncStatus.PENDING
+    val backendLedgerSyncStatus: LedgerSyncStatus = LedgerSyncStatus.PENDING,
+    val witnessCashierName: String? = null,
+    val notes: String? = null
 ) {
     val requiresSupervisorApproval: Boolean
         get() = kotlin.math.abs(cashDiscrepancy) > 10.0 && !isOverShortApproved

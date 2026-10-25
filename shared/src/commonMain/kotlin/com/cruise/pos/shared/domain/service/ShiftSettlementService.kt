@@ -84,8 +84,14 @@ class ShiftSettlementService(
             cashDiscrepancy = discrepancy,
             isBalanced = kotlin.math.abs(discrepancy) <= 0.009,
             isOverShortApproved = !requiresApproval || !supervisorPin.isNullOrBlank(),
-            supervisorOverridePin = supervisorPin
+            supervisorOverridePin = supervisorPin,
+            witnessCashierName = blindDrop.witnessCashierName,
+            notes = blindDrop.notes
         )
+    }
+
+    private fun sanitizeText(input: String, maxLength: Int = 40): String {
+        return input.filter { it in ' '..'~' }.take(maxLength)
     }
 
     /**
@@ -96,14 +102,25 @@ class ShiftSettlementService(
         val sep = "------------------------------------------\n"
         val dsep = "==========================================\n"
 
+        val cashierName = sanitizeText(zReport.cashierName)
+        val cashierId = sanitizeText(zReport.cashierId)
+        val shiftId = sanitizeText(zReport.shiftId)
+        val stationId = sanitizeText(zReport.stationId)
+        val zReportId = sanitizeText(zReport.zReportId)
+        val witness = zReport.witnessCashierName?.let { sanitizeText(it) }
+        val notes = zReport.notes?.let { sanitizeText(it, 100) }
+
         sb.append(dsep)
         sb.append("         FINAL SHIFT Z-REPORT\n")
         sb.append("     CRUISE SHIP POS RECONCILIATION\n")
         sb.append(dsep)
-        sb.append("Z-Report ID : ${zReport.zReportId}\n")
-        sb.append("Shift ID    : ${zReport.shiftId}\n")
-        sb.append("Station     : ${zReport.stationId}\n")
-        sb.append("Cashier     : ${zReport.cashierName} (${zReport.cashierId})\n")
+        sb.append("Z-Report ID : $zReportId\n")
+        sb.append("Shift ID    : $shiftId\n")
+        sb.append("Station     : $stationId\n")
+        sb.append("Cashier     : $cashierName ($cashierId)\n")
+        if (!witness.isNullOrBlank()) {
+            sb.append("Witness     : $witness\n")
+        }
         sb.append("Total Orders: ${zReport.totalOrdersCount}\n")
         sb.append(sep)
         sb.append("PAYMENT METHOD BREAKDOWN:\n")
@@ -132,8 +149,14 @@ class ShiftSettlementService(
             else -> "BALANCED (0.00)"
         }
         sb.append("Discrepancy Status  : $discLabel ($${formatMoney(disc)})\n")
+        if (!notes.isNullOrBlank()) {
+            sb.append("Notes               : $notes\n")
+        }
         sb.append(dsep)
         sb.append("Cashier Signature: _______________________\n\n")
+        if (!witness.isNullOrBlank()) {
+            sb.append("Witness Signature: _______________________\n\n")
+        }
         sb.append("Manager Signature: _______________________\n")
         sb.append(dsep)
         return sb.toString()
