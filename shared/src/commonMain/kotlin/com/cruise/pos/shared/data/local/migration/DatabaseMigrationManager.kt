@@ -47,6 +47,9 @@ class DatabaseMigrationManager(
         while (version < targetVersion) {
             val migration = migrations.firstOrNull { it.startVersion == version }
                 ?: error("Missing database migration from version $version to target $targetVersion")
+            check(migration.endVersion > version && migration.endVersion <= targetVersion) {
+                "Invalid migration $version -> ${migration.endVersion} for target $targetVersion"
+            }
             data = migration.migrateTransactions(data)
             version = migration.endVersion
         }

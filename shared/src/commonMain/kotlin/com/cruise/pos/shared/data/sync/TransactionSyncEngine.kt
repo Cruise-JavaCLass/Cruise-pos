@@ -32,7 +32,8 @@ interface RemoteTransactionSyncApi {
 class TransactionSyncEngine(
     private val transactionDao: TransactionDao,
     private val remoteApi: RemoteTransactionSyncApi,
-    private val chunkSize: Int = 10
+    private val chunkSize: Int = 10,
+    private val maxRetries: Int = 3
 ) {
     /**
      * Chunks pending transactions in strict FIFO sequence and uploads with individual idempotency keys.
@@ -47,7 +48,7 @@ class TransactionSyncEngine(
 
         val allTransactions = transactionDao.getAllTransactions()
         val pending = allTransactions
-            .filter { it.syncStatus == TransactionSyncStatus.PENDING }
+            .filter { it.syncStatus == TransactionSyncStatus.PENDING || (it.syncStatus == TransactionSyncStatus.FAILED && it.retryCount < maxRetries) }
             .sortedBy { it.sequenceNumber }
 
         if (pending.isEmpty()) {

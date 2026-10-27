@@ -103,4 +103,42 @@ class WorkManagerSyncWorkerAndIdempotencyTest {
 
         assertTrue(policy.hasExceededMaxRetries(5))
     }
+    @Test
+    fun testFailedTransactionsBelowRetryLimitAreDispatchedAgain() = runTest {
+        val dao = InMemoryTransactionDao()
+        val mockApi = MockRemoteSyncApi()
+        val engine = TransactionSyncEngine(dao, mockApi, chunkSize = 5, maxRetries = 3)
+
+        val seq = dao.getNextMonotonicSequence()
+        val tx = TransactionEntity(
+            id = "TX-FAILED-01",
+            sequenceNumber = seq,
+            outletId = "OUT-01",
+            stationId = "ST-01",
+            cashierId = "USR-01",
+            guestFolioId = "FOLIO-99",
+            cabinNumber = "9901",
+            subtotal = 50.0,
+            taxAmount = 5.0,
+            gratuityAmount = 9.0,
+            tipAmount = 0.0,
+            totalAmount = 64.0,
+            signatureSvg = "sig_failed",
+            syncStatus = TransactionSyncStatus.FAILED,
+            retryCount = 1,
+            lastError = "Network timeout",
+            createdAtEpochMs = 1774268000000L
+        )
+        dao.insertTransaction(tx)
+
+        // Sync should pick up the failed transaction since retryCount (1) < maxRetries (3)
+        val response = engine.syncPendingTransactions(isNetworkAvailable = true)
+        assertIs<SyncBatchResponse.Success>(response)
+        val success = response as SyncBatchResponse.Success
+        assertEquals(listOf("TX-FAILED-01"), success.syncedIds)
+
+        // Verify status is now SYNCED
+        val updated = dao.getTransactionById("TX-FAILED-01")
+        assertEquals(TransactionSyncStatus.SYNCED, updated?.syncStatus)
+    }
 }

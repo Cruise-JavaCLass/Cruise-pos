@@ -101,7 +101,7 @@ class InMemoryTransactionDao : TransactionDao {
 
     override fun getPendingTransactionsFlow(): Flow<List<TransactionEntity>> {
         return transactionsFlow.map { list ->
-            list.filter { it.syncStatus == TransactionSyncStatus.PENDING }
+            list.filter { it.syncStatus == TransactionSyncStatus.PENDING || (it.syncStatus == TransactionSyncStatus.FAILED && it.retryCount < 3) }
                 .sortedBy { it.sequenceNumber }
         }
     }
