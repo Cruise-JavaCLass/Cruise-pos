@@ -15,6 +15,10 @@ object SplitFolioCalculator {
 
         val originalItemIds = order.originalItems.map { it.id }.toSet()
         val allAssignedIds = order.guestAssignments.flatMap { it.assignedItemIds }
+        val guestIds = order.guestAssignments.map { it.guest.guestId }
+        require(guestIds.size == guestIds.toSet().size) {
+            "Each guest may appear in only one assignment"
+        }
 
         require(order.guestAssignments.all { it.customTipAmount >= 0.0 }) {
             "Custom tip amount must be non-negative"

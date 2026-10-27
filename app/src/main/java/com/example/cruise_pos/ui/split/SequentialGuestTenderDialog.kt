@@ -204,12 +204,16 @@ fun SequentialGuestTenderDialog(
                                     onSignCaptured("sig_${currentGuest.guestId}_${currentGuest.folioId}")
                                 }
                             },
-                            enabled = isCardTapped && !isSignatureCaptured,
+                            enabled = com.example.cruise_pos.BuildConfig.DEBUG && isCardTapped && !isSignatureCaptured,
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .testTag("btn_capture_signature")
                         ) {
-                            Text(if (isSignatureCaptured) "Signed ✓" else "Sign & Authorize")
+                            Text(
+                                if (isSignatureCaptured) "Signed ✓"
+                                else if (!com.example.cruise_pos.BuildConfig.DEBUG) "Signature pad requires hardware integration"
+                                else "Sign & Authorize (Debug Mock)"
+                            )
                         }
                     }
                 }

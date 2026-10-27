@@ -113,6 +113,38 @@ class Realtime86AndConcurrencyTest {
     }
 
     @Test
+    fun testQuotaDepletedItemRestoredByCountdownEvent() = runTest {
+        val sseClient = SseGalleyStockEventClient()
+        val repository = InventoryCatalogRepository(
+            eventClient = sseClient,
+            initialItems = listOf(specialSteak.copy(stockQuota = 1, isAvailable = true)),
+            scope = backgroundScope
+        )
+
+        // 1. Claim the only unit, depleting quota to 0 and setting isAvailable = false
+        val decremented = repository.tryDecrementQuota("STEAK-01", 1)
+        assertTrue(decremented)
+        val itemAfterDepletion = repository.getItemById("STEAK-01")
+        assertEquals(false, itemAfterDepletion?.isAvailable)
+        assertEquals(0, itemAfterDepletion?.stockQuota)
+
+        // 2. Countdown event with positive quota restores availability because it was not explicitly 86'd
+        repository.handleIncomingStockEvent(
+            StockUpdateEvent(
+                menuItemId = "STEAK-01",
+                updateType = StockUpdateType.QUOTA_COUNTDOWN,
+                remainingQuota = 5,
+                isAvailable = true
+            )
+        )
+        val itemAfterRestoration = repository.getItemById("STEAK-01")
+        assertEquals(true, itemAfterRestoration?.isAvailable, "Positive countdown must restore quota-depleted item")
+        assertEquals(5, itemAfterRestoration?.stockQuota)
+
+        repository.stopSync()
+    }
+
+    @Test
     fun test86edItemRemainsUnavailableAfterCountdownUntilRestocked() = runTest {
         val sseClient = SseGalleyStockEventClient()
         val repository = InventoryCatalogRepository(

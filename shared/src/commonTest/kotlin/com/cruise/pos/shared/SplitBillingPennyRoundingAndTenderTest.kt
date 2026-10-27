@@ -191,6 +191,22 @@ class SplitBillingPennyRoundingAndTenderTest {
             repo.buildBatchPayload("ORD-OK-1", breakdowns, emptyMap(), 1000L)
         }
 
+        // Duplicate guestId throws
+        val duplicateGuestOrder = MultiGuestSplitOrder(
+            orderId = "ORD-ERR-GUEST",
+            originalItems = listOf(
+                CartItem(id = "c1", menuItem = pizzaItem, quantity = 1),
+                CartItem(id = "c2", menuItem = cocktailItem, quantity = 1)
+            ),
+            guestAssignments = listOf(
+                GuestSplitAssignment(guest = guest1, assignedItemIds = listOf("c1")),
+                GuestSplitAssignment(guest = guest1, assignedItemIds = listOf("c2"))
+            )
+        )
+        kotlin.test.assertFailsWith<IllegalArgumentException> {
+            SplitFolioCalculator.calculateSplitBreakdown(duplicateGuestOrder)
+        }
+
         // Duplicate item assignment throws
         val duplicateOrder = MultiGuestSplitOrder(
             orderId = "ORD-ERR-DUP",

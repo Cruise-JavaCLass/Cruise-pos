@@ -22,6 +22,7 @@ class InventoryCatalogRepository(
     private val mutex = Mutex()
     private val _itemsState = MutableStateFlow(initialItems)
     val itemsState: StateFlow<List<MenuItem>> = _itemsState.asStateFlow()
+    private val explicitly86edItemIds = mutableSetOf<String>()
 
     private var eventSubscriptionJob: Job? = null
 
@@ -84,15 +85,21 @@ class InventoryCatalogRepository(
 
         val targetItem = currentList[itemIndex]
         val updatedItem = when (event.updateType) {
-            StockUpdateType.ITEM_86ED -> targetItem.copy(isAvailable = false)
-            StockUpdateType.ITEM_RESTOCKED -> targetItem.copy(
-                isAvailable = true,
-                stockQuota = event.remainingQuota ?: targetItem.stockQuota
-            )
+            StockUpdateType.ITEM_86ED -> {
+                explicitly86edItemIds.add(targetItem.id)
+                targetItem.copy(isAvailable = false)
+            }
+            StockUpdateType.ITEM_RESTOCKED -> {
+                explicitly86edItemIds.remove(targetItem.id)
+                targetItem.copy(
+                    isAvailable = true,
+                    stockQuota = event.remainingQuota ?: targetItem.stockQuota
+                )
+            }
             StockUpdateType.QUOTA_COUNTDOWN -> {
+                val isExplicitly86ed = explicitly86edItemIds.contains(targetItem.id)
                 val newQuota = event.remainingQuota ?: targetItem.stockQuota
-                // If item is already 86'd/unavailable, a countdown without restock cannot make it available
-                val isStillAvailable = targetItem.isAvailable && (newQuota == null || newQuota > 0) && event.isAvailable
+                val isStillAvailable = !isExplicitly86ed && (newQuota == null || newQuota > 0) && event.isAvailable
                 targetItem.copy(
                     stockQuota = newQuota,
                     isAvailable = isStillAvailable
