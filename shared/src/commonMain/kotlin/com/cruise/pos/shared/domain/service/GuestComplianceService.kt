@@ -75,7 +75,7 @@ class GuestComplianceService(
         passenger: PassengerComplianceProfile,
         cabinCredit: CabinCreditStatus,
         item: MenuItem,
-        purchaseAmount: Double = item.basePrice,
+        purchaseAmount: Double,
         currentTimestampMillis: Long,
         zoneId: ZoneId = defaultZoneId,
         stationId: String = defaultStationId,
@@ -260,11 +260,19 @@ interface GuestSecurityAuditLogger {
     fun getAuditLogs(): List<SecurityAuditRecord>
 }
 
-class InMemoryGuestSecurityAuditLogger : GuestSecurityAuditLogger {
+class InMemoryGuestSecurityAuditLogger(
+    private val maxCapacity: Int = 1000
+) : GuestSecurityAuditLogger {
     private val records = MutableStateFlow<List<SecurityAuditRecord>>(emptyList())
 
     override fun logViolation(record: SecurityAuditRecord) {
-        records.update { it + record }
+        records.update { current ->
+            if (current.size >= maxCapacity) {
+                current.drop(current.size - maxCapacity + 1) + record
+            } else {
+                current + record
+            }
+        }
     }
 
     override fun getAuditLogs(): List<SecurityAuditRecord> {

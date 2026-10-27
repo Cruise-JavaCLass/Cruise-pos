@@ -5,6 +5,7 @@ import com.cruise.pos.shared.domain.model.FolioAccountStatus
 import com.cruise.pos.shared.domain.model.PassengerComplianceProfile
 import com.cruise.pos.shared.domain.model.MenuItem
 import com.cruise.pos.shared.domain.model.PolicyViolationType
+import com.cruise.pos.shared.domain.model.SecurityAuditRecord
 import com.cruise.pos.shared.domain.service.GuestComplianceService
 import com.cruise.pos.shared.domain.service.InMemoryGuestSecurityAuditLogger
 import java.time.ZoneId
@@ -343,6 +344,7 @@ class GuestComplianceAndSpendingLimitTest {
             passenger = minor,
             cabinCredit = cabin,
             item = arbitraryItem,
+            purchaseAmount = arbitraryItem.basePrice,
             currentTimestampMillis = testTimestampMillis,
             zoneId = utcZone
         )
@@ -374,5 +376,32 @@ class GuestComplianceAndSpendingLimitTest {
         )
         assertFalse(result.isPermitted)
         assertTrue(result.violations.contains(PolicyViolationType.UNDERAGE_ALCOHOL_ATTEMPT))
+    }
+
+    @Test
+    fun testBoundedAuditLogCapacity() {
+        val boundedLogger = InMemoryGuestSecurityAuditLogger(maxCapacity = 3)
+        for (i in 1..5) {
+            boundedLogger.logViolation(
+                SecurityAuditRecord(
+                    auditId = "REC-$i",
+                    passengerId = "P-1",
+                    passengerName = "Test",
+                    cabinNumber = "CAB-1",
+                    violationType = PolicyViolationType.UNDERAGE_ALCOHOL_ATTEMPT,
+                    attemptedAmount = 10.0,
+                    itemName = "Item $i",
+                    itemCategory = "bar",
+                    stationId = "ST-1",
+                    cashierId = "C-1",
+                    timestampMillis = 1000L * i,
+                    notes = "test"
+                )
+            )
+        }
+        val records = boundedLogger.getAuditLogs()
+        assertEquals(3, records.size)
+        assertEquals("REC-3", records[0].auditId)
+        assertEquals("REC-5", records[2].auditId)
     }
 }
