@@ -14,3 +14,5 @@ repomix-*.xml
 repomix-*.txt
 repomix-*.md
 repomix-output.*
+
+.kotlin/
