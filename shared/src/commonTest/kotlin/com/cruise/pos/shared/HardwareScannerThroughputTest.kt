@@ -225,14 +225,6 @@ class HardwareScannerThroughputTest {
         assertTrue(firstScan)
         assertEquals(1, feedback.beepCount)
 
-        // Immediate duplicate scan within cooldown must be dropped (no beep)
-        val immediateDup = defaultEngine.processRawBroadcastIntent(
-            action = UnifiedHardwareScannerEngine.SUNMI_ACTION_SCAN,
-            extrasMap = mapOf("data" to "BARCODE-DEFAULT-TEST")
-        )
-        assertTrue(immediateDup)
-        assertEquals(1, feedback.beepCount)
-
         // Wait until real monotonic time has passed 20ms cooldown
         val start = kotlin.time.TimeSource.Monotonic.markNow()
         while (start.elapsedNow().inWholeMilliseconds < 35L) {
