@@ -128,4 +128,59 @@ class RoomDaoCrudOperationsTest {
         assertEquals(1, failedTx.retryCount)
         assertEquals("Network timeout", failedTx.lastError)
     }
+    @Test
+    fun testProductUpsertVersionCheckPreservesLocalStockOnEqualVersion() = runTest {
+        val productDao = InMemoryProductDao()
+
+        val initialProduct = ProductEntity(
+            id = "P1",
+            outletId = "OUT-01",
+            categoryId = "C1",
+            name = "Mojito",
+            basePrice = 12.0,
+            stockQuota = 20,
+            version = 1
+        )
+        productDao.upsertProducts(listOf(initialProduct))
+
+        // Locally update stock quota and availability
+        productDao.updateStockQuota("P1", quota = 0, isAvailable = false)
+        val afterStockUpdate = productDao.getProductById("P1")
+        assertNotNull(afterStockUpdate)
+        assertEquals(0, afterStockUpdate.stockQuota)
+        assertEquals(false, afterStockUpdate.isAvailable)
+
+        // Incoming refresh snapshot with equal version (version 1) must NOT overwrite local stock changes
+        val equalVersionRefresh = ProductEntity(
+            id = "P1",
+            outletId = "OUT-01",
+            categoryId = "C1",
+            name = "Mojito",
+            basePrice = 12.0,
+            stockQuota = 20,
+            version = 1
+        )
+        productDao.upsertProducts(listOf(equalVersionRefresh))
+        val afterEqualRefresh = productDao.getProductById("P1")
+        assertNotNull(afterEqualRefresh)
+        assertEquals(0, afterEqualRefresh.stockQuota, "Local stock quota should be preserved on equal version")
+        assertEquals(false, afterEqualRefresh.isAvailable, "Local availability should be preserved on equal version")
+
+        // Incoming snapshot with higher version (version 2) MUST overwrite
+        val higherVersionRefresh = ProductEntity(
+            id = "P1",
+            outletId = "OUT-01",
+            categoryId = "C1",
+            name = "Mojito Special",
+            basePrice = 14.0,
+            stockQuota = 50,
+            version = 2
+        )
+        productDao.upsertProducts(listOf(higherVersionRefresh))
+        val afterHigherRefresh = productDao.getProductById("P1")
+        assertNotNull(afterHigherRefresh)
+        assertEquals(50, afterHigherRefresh.stockQuota)
+        assertEquals("Mojito Special", afterHigherRefresh.name)
+        assertEquals(2, afterHigherRefresh.version)
+    }
 }

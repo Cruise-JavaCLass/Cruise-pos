@@ -73,7 +73,7 @@ class InMemoryProductDao : ProductDao {
         val current = productsFlow.value.associateBy { it.id }.toMutableMap()
         products.forEach { incoming ->
             val existing = current[incoming.id]
-            if (existing == null || incoming.version >= existing.version) {
+            if (existing == null || incoming.version > existing.version) {
                 current[incoming.id] = incoming
             }
         }
