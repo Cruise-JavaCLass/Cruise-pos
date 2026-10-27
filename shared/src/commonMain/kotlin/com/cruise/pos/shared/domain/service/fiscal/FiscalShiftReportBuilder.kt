@@ -41,7 +41,10 @@ class FiscalShiftReportBuilder(
         return jsonSerializer.encodeToString(ledger)
     }
 
-    private fun toCents(amount: Double): Long = kotlin.math.round(amount * 100.0).toLong()
+    private fun toCents(amount: Double): Long {
+        require(amount.isFinite()) { "Fiscal amount must be finite: $amount" }
+        return kotlin.math.round(amount * 100.0).toLong()
+    }
     private fun fromCents(cents: Long): Double = cents / 100.0
 
     fun assembleShiftLedger(
@@ -55,7 +58,19 @@ class FiscalShiftReportBuilder(
         initialCashFloat: Double,
         receiptEntries: List<ReceiptAuditEntry>
     ): FiscalShiftLedger {
-        val entriesSnapshot = receiptEntries.toList()
+        require(initialCashFloat.isFinite()) { "Initial cash float must be finite: $initialCashFloat" }
+        val normalizedFloat = fromCents(toCents(initialCashFloat))
+        val entriesSnapshot = receiptEntries.map { entry ->
+            require(entry.totalAmount.isFinite()) { "Receipt totalAmount must be finite: ${entry.transactionId}" }
+            require(entry.taxAmount.isFinite()) { "Receipt taxAmount must be finite: ${entry.transactionId}" }
+            val roundedTotal = fromCents(toCents(entry.totalAmount))
+            val roundedTax = fromCents(toCents(entry.taxAmount))
+            if (roundedTotal == entry.totalAmount && roundedTax == entry.taxAmount) {
+                entry
+            } else {
+                entry.copy(totalAmount = roundedTotal, taxAmount = roundedTax)
+            }
+        }
         val totalCashCents = entriesSnapshot.filter { it.tenderType.uppercase() == "CASH" }.sumOf { toCents(it.totalAmount) }
         val totalFolioCents = entriesSnapshot.filter { it.tenderType.uppercase().contains("FOLIO") }.sumOf { toCents(it.totalAmount) }
         val totalCardCents = entriesSnapshot.filter { it.tenderType.uppercase().contains("CARD") }.sumOf { toCents(it.totalAmount) }
@@ -72,7 +87,7 @@ class FiscalShiftReportBuilder(
             cashierId = cashierId,
             openedAtEpochMs = openedAtEpochMs,
             closedAtEpochMs = closedAtEpochMs,
-            initialCashFloat = initialCashFloat,
+            initialCashFloat = normalizedFloat,
             totalCashSales = fromCents(totalCashCents),
             totalFolioSales = fromCents(totalFolioCents),
             totalCardSales = fromCents(totalCardCents),

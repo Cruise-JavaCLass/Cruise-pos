@@ -288,4 +288,91 @@ class MaritimeFiscalDutyFreeAndAuditReconciliationTest {
             com.cruise.pos.shared.domain.service.Sha256Digest.digest(ByteArray(65) { 0x61 })
         )
     }
+
+    @Test
+    fun testNonFiniteAmountsAndCentConsistencyInFiscalLedger() {
+        val reportBuilder = FiscalShiftReportBuilder()
+
+        // Test non-finite initial cash float rejection
+        kotlin.test.assertFailsWith<IllegalArgumentException> {
+            reportBuilder.assembleShiftLedger(
+                exportId = "EXP-1",
+                shiftId = "S-1",
+                terminalId = "T-1",
+                outletId = "O-1",
+                cashierId = "C-1",
+                openedAtEpochMs = 1000L,
+                closedAtEpochMs = 2000L,
+                initialCashFloat = Double.NaN,
+                receiptEntries = emptyList()
+            )
+        }
+
+        // Test non-finite receipt amount rejection
+        val nanReceipt = ReceiptAuditEntry(
+            sequenceNumber = 1L,
+            transactionId = "TX-NAN",
+            guestFolioId = "FOLIO-1",
+            cabinNumber = "101",
+            timestampEpochMs = 1500L,
+            totalAmount = Double.POSITIVE_INFINITY,
+            taxAmount = 0.0,
+            tenderType = "CASH",
+            signatureHashSha256 = "sig",
+            receiptPayloadHashSha256 = "payload"
+        )
+        kotlin.test.assertFailsWith<IllegalArgumentException> {
+            reportBuilder.assembleShiftLedger(
+                exportId = "EXP-2",
+                shiftId = "S-2",
+                terminalId = "T-2",
+                outletId = "O-2",
+                cashierId = "C-2",
+                openedAtEpochMs = 1000L,
+                closedAtEpochMs = 2000L,
+                initialCashFloat = 100.0,
+                receiptEntries = listOf(nanReceipt)
+            )
+        }
+
+        // Test fractional cent normalization consistency
+        val r1 = ReceiptAuditEntry(
+            sequenceNumber = 1L,
+            transactionId = "TX-FRACT-1",
+            guestFolioId = "FOLIO-1",
+            cabinNumber = "101",
+            timestampEpochMs = 1500L,
+            totalAmount = 0.125, // rounds to 0.13 or 0.12
+            taxAmount = 0.012,
+            tenderType = "CASH",
+            signatureHashSha256 = "sig1",
+            receiptPayloadHashSha256 = "payload1"
+        )
+        val r2 = ReceiptAuditEntry(
+            sequenceNumber = 2L,
+            transactionId = "TX-FRACT-2",
+            guestFolioId = "FOLIO-2",
+            cabinNumber = "102",
+            timestampEpochMs = 1600L,
+            totalAmount = 0.125,
+            taxAmount = 0.012,
+            tenderType = "CASH",
+            signatureHashSha256 = "sig2",
+            receiptPayloadHashSha256 = "payload2"
+        )
+        val ledger = reportBuilder.assembleShiftLedger(
+            exportId = "EXP-3",
+            shiftId = "S-3",
+            terminalId = "T-3",
+            outletId = "O-3",
+            cashierId = "C-3",
+            openedAtEpochMs = 1000L,
+            closedAtEpochMs = 2000L,
+            initialCashFloat = 50.0,
+            receiptEntries = listOf(r1, r2)
+        )
+        // Ensure sum of receiptEntries matches grossTotalSales exactly
+        val entrySum = ledger.receiptEntries.sumOf { it.totalAmount }
+        assertEquals(ledger.grossTotalSales, entrySum)
+    }
 }
