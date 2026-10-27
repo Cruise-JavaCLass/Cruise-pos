@@ -293,6 +293,19 @@ class GuestComplianceAndSpendingLimitTest {
     }
 
     @Test
+    fun testNonAlcoholicSeparatorsNotFlaggedAsAlcohol() {
+        assertFalse(complianceService.isAlcoholItem("bar_beverages", "Non-Alcoholic Beer"))
+        assertFalse(complianceService.isAlcoholItem("bar_beverages", "Non Alcoholic Beer"))
+        assertFalse(complianceService.isAlcoholItem("bar_beverages", "non_alcoholic craft cider"))
+    }
+
+    @Test
+    fun testSpiritAmbiguityAndPluralSpirits() {
+        assertFalse(complianceService.isAlcoholItem("gift_shop", "Spirit of Adventure T-shirt"))
+        assertTrue(complianceService.isAlcoholItem("bar_beverages", "Premium Spirits Flight"))
+    }
+
+    @Test
     fun testAdultWithParentalAlcoholLockIsBlocked() {
         val adultWithLock = PassengerComplianceProfile(
             passengerId = "P-8001",

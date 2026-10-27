@@ -19,9 +19,12 @@ class GuestComplianceService(
     private val defaultCashierId: String = "CASHIER-01"
 ) {
 
-    private val nonAlcoholicMarkers = listOf("non-alcoholic", "virgin mojito", "virgin colada", "virgin mary", "zero-proof")
+    private val nonAlcoholicMarkers = listOf(
+        "non-alcoholic", "non alcoholic", "non_alcoholic",
+        "virgin mojito", "virgin colada", "virgin mary", "zero-proof"
+    )
     private val alcoholKeywords = setOf(
-        "alcohol", "liquor", "cocktail", "wine", "beer", "spirit", "spirits",
+        "alcohol", "liquor", "cocktail", "wine", "beer", "spirits",
         "whiskey", "whisky", "vodka", "gin", "rum", "tequila", "champagne",
         "bar_beverages"
     )
