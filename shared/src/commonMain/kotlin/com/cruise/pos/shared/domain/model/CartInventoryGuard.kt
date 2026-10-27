@@ -28,28 +28,39 @@ class CartInventoryGuard(
     suspend fun validateCartBeforeTender(items: List<CartItem>): CartInventoryValidationResult {
         val issues = mutableListOf<CartItemValidationIssue>()
 
+        val aggregatedQuantities = items.groupBy { it.menuItem.id }
+            .mapValues { (_, cartItems) -> cartItems.sumOf { it.quantity } }
+
+        val validatedMenuIds = mutableSetOf<String>()
+
         for (item in items) {
+            if (!validatedMenuIds.add(item.menuItem.id)) {
+                continue // Already checked this menu item
+            }
+
+            val totalRequested = aggregatedQuantities[item.menuItem.id] ?: item.quantity
             val freshItem = inventoryRepository.getItemById(item.menuItem.id)
+
             if (freshItem == null || freshItem.is86ed) {
                 issues.add(
                     CartItemValidationIssue(
                         cartItemId = item.id,
                         menuItemId = item.menuItem.id,
                         menuItemName = item.menuItem.name,
-                        requestedQuantity = item.quantity,
+                        requestedQuantity = totalRequested,
                         remainingStock = freshItem?.stockQuota ?: 0,
                         reason = "Item has been 86'd (Sold Out) by the kitchen"
                     )
                 )
-            } else if (freshItem.stockQuota != null && freshItem.stockQuota < item.quantity) {
+            } else if (freshItem.stockQuota != null && freshItem.stockQuota < totalRequested) {
                 issues.add(
                     CartItemValidationIssue(
                         cartItemId = item.id,
                         menuItemId = item.menuItem.id,
                         menuItemName = item.menuItem.name,
-                        requestedQuantity = item.quantity,
+                        requestedQuantity = totalRequested,
                         remainingStock = freshItem.stockQuota,
-                        reason = "Requested ${item.quantity} units, but only ${freshItem.stockQuota} remain in stock"
+                        reason = "Requested $totalRequested units, but only ${freshItem.stockQuota} remain in stock"
                     )
                 )
             }
