@@ -37,6 +37,13 @@ class FiscalShiftReportBuilder(
     /**
      * Assembles a structured FiscalShiftLedger package.
      */
+    fun exportToJson(ledger: FiscalShiftLedger): String {
+        return jsonSerializer.encodeToString(ledger)
+    }
+
+    private fun toCents(amount: Double): Long = kotlin.math.round(amount * 100.0).toLong()
+    private fun fromCents(cents: Long): Double = cents / 100.0
+
     fun assembleShiftLedger(
         exportId: String,
         shiftId: String,
@@ -48,12 +55,14 @@ class FiscalShiftReportBuilder(
         initialCashFloat: Double,
         receiptEntries: List<ReceiptAuditEntry>
     ): FiscalShiftLedger {
-        val totalCash = receiptEntries.filter { it.tenderType.uppercase() == "CASH" }.sumOf { it.totalAmount }
-        val totalFolio = receiptEntries.filter { it.tenderType.uppercase().contains("FOLIO") }.sumOf { it.totalAmount }
-        val totalCard = receiptEntries.filter { it.tenderType.uppercase().contains("CARD") }.sumOf { it.totalAmount }
-        val gross = receiptEntries.sumOf { it.totalAmount }
-        val totalTax = receiptEntries.sumOf { it.taxAmount }
-        val merkleRoot = computeCumulativeHashRoot(receiptEntries)
+        val entriesSnapshot = receiptEntries.toList()
+        val totalCashCents = entriesSnapshot.filter { it.tenderType.uppercase() == "CASH" }.sumOf { toCents(it.totalAmount) }
+        val totalFolioCents = entriesSnapshot.filter { it.tenderType.uppercase().contains("FOLIO") }.sumOf { toCents(it.totalAmount) }
+        val totalCardCents = entriesSnapshot.filter { it.tenderType.uppercase().contains("CARD") }.sumOf { toCents(it.totalAmount) }
+        val grossCents = entriesSnapshot.sumOf { toCents(it.totalAmount) }
+        val totalTaxCents = entriesSnapshot.sumOf { toCents(it.taxAmount) }
+        val netCents = grossCents - totalTaxCents
+        val merkleRoot = computeCumulativeHashRoot(entriesSnapshot)
 
         return FiscalShiftLedger(
             exportId = exportId,
@@ -64,23 +73,25 @@ class FiscalShiftReportBuilder(
             openedAtEpochMs = openedAtEpochMs,
             closedAtEpochMs = closedAtEpochMs,
             initialCashFloat = initialCashFloat,
-            totalCashSales = totalCash,
-            totalFolioSales = totalFolio,
-            totalCardSales = totalCard,
-            grossTotalSales = gross,
-            netTotalSales = gross - totalTax,
-            totalTaxCollected = totalTax,
-            receiptEntries = receiptEntries,
+            totalCashSales = fromCents(totalCashCents),
+            totalFolioSales = fromCents(totalFolioCents),
+            totalCardSales = fromCents(totalCardCents),
+            grossTotalSales = fromCents(grossCents),
+            netTotalSales = fromCents(netCents),
+            totalTaxCollected = fromCents(totalTaxCents),
+            receiptEntries = entriesSnapshot,
             cumulativeMerkleRootSha256 = merkleRoot
         )
     }
 
     companion object {
+        private val defaultJson = Json { prettyPrint = true }
+
         /**
          * Serializes ledger to JSON.
          */
         fun exportToJson(ledger: FiscalShiftLedger): String {
-            return Json { prettyPrint = true }.encodeToString(ledger)
+            return defaultJson.encodeToString(ledger)
         }
 
         private fun formatMoney(value: Double): String {
@@ -112,6 +123,5 @@ class FiscalShiftReportBuilder(
         }
     }
 
-    fun exportToJson(ledger: FiscalShiftLedger): String = Companion.exportToJson(ledger)
     fun exportToCsv(ledger: FiscalShiftLedger): String = Companion.exportToCsv(ledger)
 }

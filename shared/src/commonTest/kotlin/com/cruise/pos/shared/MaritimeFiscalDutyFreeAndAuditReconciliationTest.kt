@@ -199,8 +199,10 @@ class MaritimeFiscalDutyFreeAndAuditReconciliationTest {
         assertTrue(csvOutput.contains("FOLIO-7712"))
 
         // Mock Signer and API client
+        var capturedPayloadBytes: ByteArray? = null
         val mockSigner = object : DigitalCertificateSigner {
             override suspend fun signPayload(keyAlias: String, payloadBytes: ByteArray): Result<String> {
+                capturedPayloadBytes = payloadBytes
                 return Result.success("MOCK_CERT_SIG_HEX_SHA256_RSA")
             }
 
@@ -234,6 +236,8 @@ class MaritimeFiscalDutyFreeAndAuditReconciliationTest {
         assertEquals("ACCEPTED", response.status)
         assertEquals("SUB-ACK-999", response.submissionId)
         assertEquals("SHA256:F4:89:C1:90:3A:21", mockApiClient.submittedPackage?.digitalCertificateFingerprint)
+        assertEquals(jsonOutput, mockApiClient.submittedPackage?.payloadJson)
+        assertTrue(capturedPayloadBytes?.contentEquals(jsonOutput.encodeToByteArray()) == true)
     }
 
     @Test

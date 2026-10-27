@@ -12,10 +12,11 @@ import com.cruise.pos.shared.domain.model.fiscal.PaymentTenderSummary
  * sequence counters or altering drawer totals.
  */
 class MidDayXReportGenerator(
-    private val clock: () -> Long = { 1774274400000L }
+    private val clock: () -> Long = { kotlin.time.Clock.System.now().toEpochMilliseconds() }
 ) {
 
     private fun formatMoney(value: Double): String {
+        require(value.isFinite()) { "Monetary value must be finite, was: $value" }
         val cents = kotlin.math.round(kotlin.math.abs(value) * 100.0).toLong()
         val sign = if (value < 0.0 && cents != 0L) "-" else ""
         return "$sign${cents / 100}.${(cents % 100).toString().padStart(2, '0')}"
@@ -44,8 +45,20 @@ class MidDayXReportGenerator(
         hourlyActivity: List<HourlySalesBucket> = emptyList(),
         fiscalSummary: MaritimeFiscalSummary? = null
     ): MidDayXReportSnapshot {
+        require(totalGrossRevenue.isFinite() && totalDiscounts.isFinite() && totalRefunds.isFinite()) {
+            "Revenue and discount amounts must be finite"
+        }
+        paymentTenders.forEach {
+            require(it.totalAmount.isFinite()) {
+                "Payment tender amount must be finite, tender: ${it.tenderType}"
+            }
+        }
+        require(cashDrawer.openingFloat.isFinite() && cashDrawer.cashSales.isFinite() && cashDrawer.paidIns.isFinite() && cashDrawer.paidOuts.isFinite() && cashDrawer.cashDrops.isFinite()) {
+            "Cash drawer reconciliation amounts must be finite"
+        }
+
         val totalNet = totalGrossRevenue - totalDiscounts - totalRefunds
-        val xReportNumber = "X-$terminalId-${snapshotTimestampEpochMs}"
+        val xReportNumber = "X-$terminalId-$snapshotTimestampEpochMs"
 
         return MidDayXReportSnapshot(
             xReportNumber = xReportNumber,

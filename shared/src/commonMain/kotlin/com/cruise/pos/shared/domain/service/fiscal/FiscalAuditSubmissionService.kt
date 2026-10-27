@@ -9,7 +9,8 @@ import com.cruise.pos.shared.domain.model.fiscal.SignedFiscalReportSubmission
 class FiscalAuditSubmissionService(
     private val signer: DigitalCertificateSigner,
     private val apiClient: FiscalAuditApiClient,
-    private val reportBuilder: FiscalShiftReportBuilder = FiscalShiftReportBuilder()
+    private val reportBuilder: FiscalShiftReportBuilder = FiscalShiftReportBuilder(),
+    private val clock: () -> Long = { kotlin.time.Clock.System.now().toEpochMilliseconds() }
 ) {
 
     /**
@@ -18,7 +19,7 @@ class FiscalAuditSubmissionService(
     suspend fun signAndSubmitFiscalReport(
         keyAlias: String,
         ledger: FiscalShiftLedger,
-        submissionTimestampEpochMs: Long = ledger.closedAtEpochMs
+        submissionTimestampEpochMs: Long = clock()
     ): Result<FiscalReportSubmissionResponse> {
         val payloadJson = reportBuilder.exportToJson(ledger)
         val payloadBytes = payloadJson.encodeToByteArray()
