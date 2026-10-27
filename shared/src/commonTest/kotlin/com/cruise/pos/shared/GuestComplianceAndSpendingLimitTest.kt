@@ -3,6 +3,7 @@ package com.cruise.pos.shared
 import com.cruise.pos.shared.domain.model.CabinCreditStatus
 import com.cruise.pos.shared.domain.model.FolioAccountStatus
 import com.cruise.pos.shared.domain.model.PassengerComplianceProfile
+import com.cruise.pos.shared.domain.model.MenuItem
 import com.cruise.pos.shared.domain.model.PolicyViolationType
 import com.cruise.pos.shared.domain.service.GuestComplianceService
 import com.cruise.pos.shared.domain.service.InMemoryGuestSecurityAuditLogger
@@ -303,6 +304,50 @@ class GuestComplianceAndSpendingLimitTest {
     fun testSpiritAmbiguityAndPluralSpirits() {
         assertFalse(complianceService.isAlcoholItem("gift_shop", "Spirit of Adventure T-shirt"))
         assertTrue(complianceService.isAlcoholItem("bar_beverages", "Premium Spirits Flight"))
+    }
+
+    @Test
+    fun testCatalogAuthoritativeAlcoholClassificationOverridesKeywords() {
+        val minor = PassengerComplianceProfile(
+            passengerId = "P-9901",
+            fullName = "Young Traveler",
+            cabinNumber = "CAB-5005",
+            dateOfBirthIso = "2010-01-01",
+            isMinor = true,
+            ageAtCurrentVoyage = 16
+        )
+        val cabin = CabinCreditStatus("CAB-5005", creditLimit = 1000.0)
+
+        // 1. "Sake" in generic "beverages" category is detected as alcohol via keyword
+        val sakeResult = complianceService.evaluatePurchaseCompliance(
+            passenger = minor,
+            cabinCredit = cabin,
+            purchaseAmount = 15.0,
+            itemName = "Junmai Daiginjo Sake",
+            categoryId = "beverages",
+            currentTimestampMillis = testTimestampMillis,
+            zoneId = utcZone
+        )
+        assertFalse(sakeResult.isPermitted, "Sake must be detected and blocked for minor")
+        assertTrue(sakeResult.violations.contains(PolicyViolationType.UNDERAGE_ALCOHOL_ATTEMPT))
+
+        // 2. Catalog-owned authoritative isAlcoholic = true blocks arbitrary item names
+        val arbitraryItem = MenuItem(
+            id = "ITEM-CHEF-SPECIAL",
+            name = "Chef Flambee Special",
+            categoryId = "dinner_entree",
+            basePrice = 45.0,
+            isAlcoholic = true
+        )
+        val catalogItemResult = complianceService.evaluatePurchaseCompliance(
+            passenger = minor,
+            cabinCredit = cabin,
+            item = arbitraryItem,
+            currentTimestampMillis = testTimestampMillis,
+            zoneId = utcZone
+        )
+        assertFalse(catalogItemResult.isPermitted, "Authoritative catalog alcohol flag must block minor")
+        assertTrue(catalogItemResult.violations.contains(PolicyViolationType.UNDERAGE_ALCOHOL_ATTEMPT))
     }
 
     @Test

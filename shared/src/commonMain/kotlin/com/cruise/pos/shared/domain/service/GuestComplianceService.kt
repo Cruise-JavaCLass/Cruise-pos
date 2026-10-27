@@ -10,7 +10,9 @@ import java.time.Instant
 import java.time.LocalDate
 import java.time.Period
 import java.time.ZoneId
-import java.util.Collections
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.update
+import com.cruise.pos.shared.domain.model.MenuItem
 
 class GuestComplianceService(
     private val auditLogger: GuestSecurityAuditLogger = InMemoryGuestSecurityAuditLogger(),
@@ -26,7 +28,7 @@ class GuestComplianceService(
     private val alcoholKeywords = setOf(
         "alcohol", "liquor", "cocktail", "wine", "beer", "spirits",
         "whiskey", "whisky", "vodka", "gin", "rum", "tequila", "champagne",
-        "bar_beverages"
+        "sake", "bar_beverages"
     )
 
     private fun toCents(amount: Double): Long = kotlin.math.round(amount * 100.0).toLong()
@@ -72,10 +74,33 @@ class GuestComplianceService(
     fun evaluatePurchaseCompliance(
         passenger: PassengerComplianceProfile,
         cabinCredit: CabinCreditStatus,
+        item: MenuItem,
+        purchaseAmount: Double = item.basePrice,
+        currentTimestampMillis: Long,
+        zoneId: ZoneId = defaultZoneId,
+        stationId: String = defaultStationId,
+        cashierId: String = defaultCashierId
+    ): ComplianceCheckResult = evaluatePurchaseCompliance(
+        passenger = passenger,
+        cabinCredit = cabinCredit,
+        purchaseAmount = purchaseAmount,
+        itemName = item.name,
+        categoryId = item.categoryId,
+        currentTimestampMillis = currentTimestampMillis,
+        isAlcoholic = item.isAlcoholic,
+        zoneId = zoneId,
+        stationId = stationId,
+        cashierId = cashierId
+    )
+
+    fun evaluatePurchaseCompliance(
+        passenger: PassengerComplianceProfile,
+        cabinCredit: CabinCreditStatus,
         purchaseAmount: Double,
         itemName: String,
         categoryId: String,
         currentTimestampMillis: Long,
+        isAlcoholic: Boolean? = null,
         zoneId: ZoneId = defaultZoneId,
         stationId: String = defaultStationId,
         cashierId: String = defaultCashierId
@@ -83,9 +108,9 @@ class GuestComplianceService(
         val violations = mutableListOf<PolicyViolationType>()
         val reasons = mutableListOf<String>()
 
-        // 1. Age Verification & Alcohol Guard
+        // 1. Age Verification & Alcohol Guard (Authoritative catalog flag takes precedence, fallback to keyword inference)
         val calculatedAge = calculateAge(passenger.dateOfBirthIso, currentTimestampMillis, zoneId)
-        val isItemAlcohol = isAlcoholItem(categoryId, itemName)
+        val isItemAlcohol = (isAlcoholic == true) || isAlcoholItem(categoryId, itemName)
 
         if (isItemAlcohol && (calculatedAge < LEGAL_DRINKING_AGE || passenger.parentalAlcoholLock)) {
             violations.add(PolicyViolationType.UNDERAGE_ALCOHOL_ATTEMPT)
@@ -236,15 +261,13 @@ interface GuestSecurityAuditLogger {
 }
 
 class InMemoryGuestSecurityAuditLogger : GuestSecurityAuditLogger {
-    private val records = Collections.synchronizedList(mutableListOf<SecurityAuditRecord>())
+    private val records = MutableStateFlow<List<SecurityAuditRecord>>(emptyList())
 
     override fun logViolation(record: SecurityAuditRecord) {
-        records.add(record)
+        records.update { it + record }
     }
 
     override fun getAuditLogs(): List<SecurityAuditRecord> {
-        synchronized(records) {
-            return records.toList()
-        }
+        return records.value
     }
 }
