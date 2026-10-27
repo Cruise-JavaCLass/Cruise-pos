@@ -169,4 +169,39 @@ class NetworkHealthAndAdaptiveSyncTest {
         assertTrue(gzipBytes.size < rawBytes.size)
         assertTrue(gzipBytes.size > 0)
     }
+    @Test
+    fun testStaleMeasurementDoesNotAffectAcceptedSnapshotPolicy() {
+        // Retained fresh snapshot at t = 5000: OFFLINE without edge gateway
+        val freshOfflinePolicy = engine.recordNetworkMeasurement(
+            latencyMillis = 9999L,
+            rssiDbm = -100,
+            bandwidthKbps = 0,
+            packetLossPercent = 1.0f,
+            timestampMillis = 5000L
+        )
+        assertEquals(SyncGatewayType.LOCAL_OFFLINE_STORAGE, freshOfflinePolicy.gatewayType)
+
+        // Register edge gateway
+        discovery.registerGateway(
+            DiscoveredEdgeGateway(
+                serviceName = "_cruise-edge-sync._tcp",
+                host = "192.168.10.99",
+                port = 8443,
+                discoveredAtMillis = 2000L
+            )
+        )
+
+        // Incoming measurement with stale timestamp t = 3000 (earlier than 5000)
+        val stalePolicy = engine.recordNetworkMeasurement(
+            latencyMillis = 9999L,
+            rssiDbm = -65,
+            bandwidthKbps = 0,
+            packetLossPercent = 1.0f,
+            timestampMillis = 3000L
+        )
+
+        // Must retain previous accepted snapshot policy (LOCAL_OFFLINE_STORAGE), not switch to edge gateway
+        assertEquals(SyncGatewayType.LOCAL_OFFLINE_STORAGE, stalePolicy.gatewayType)
+        assertEquals(5000L, engine.networkState.value.timestampMillis)
+    }
 }

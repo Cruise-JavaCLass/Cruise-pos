@@ -105,7 +105,7 @@ class AdaptiveNetworkSyncEngine(
             }
         }
 
-        return computeSyncPolicy(accepted, discoveredEdge)
+        return computeSyncPolicy(accepted)
     }
 
     /**
