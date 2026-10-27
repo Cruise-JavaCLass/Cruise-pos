@@ -51,37 +51,36 @@ fun MultiGuestSplitDrawer(
                 .fillMaxSize()
                 .padding(16.dp)
         ) {
-            // Header
+            // Split Partition Drawer Header
             Row(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 6.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+                verticalAlignment = Alignment.Top
             ) {
-                Column {
-                    Text(
-                        text = "Split Folio By Guest",
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.Bold,
-                        modifier = Modifier.testTag("split_drawer_title")
-                    )
-                    Text(
-                        text = "Partition items across staterooms & guests",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-
-                OutlinedButton(
+                Text(
+                    text = "Split Folio By Guest",
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier
+                        .weight(1f)
+                        .testTag("split_drawer_title")
+                )
+                TextButton(
                     onClick = onDismiss,
                     modifier = Modifier.testTag("close_split_drawer_btn")
                 ) {
-                    Text("Close")
+                    Text("Close", fontWeight = FontWeight.SemiBold)
                 }
             }
-
-            Spacer(modifier = Modifier.height(12.dp))
-            Divider()
-            Spacer(modifier = Modifier.height(12.dp))
+            Text(
+                text = "Partition items across staterooms & guests",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(bottom = 12.dp)
+            )
+            Divider(modifier = Modifier.padding(bottom = 16.dp))
 
             // Guest Selector Chips / Tabs
             Text(

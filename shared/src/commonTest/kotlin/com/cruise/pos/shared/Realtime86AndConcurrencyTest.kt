@@ -113,6 +113,54 @@ class Realtime86AndConcurrencyTest {
     }
 
     @Test
+    fun test86edItemRemainsUnavailableAfterCountdownUntilRestocked() = runTest {
+        val sseClient = SseGalleyStockEventClient()
+        val repository = InventoryCatalogRepository(
+            eventClient = sseClient,
+            initialItems = listOf(specialSteak.copy(stockQuota = 5, isAvailable = true)),
+            scope = backgroundScope
+        )
+
+        // 1. Kitchen 86s the item
+        repository.handleIncomingStockEvent(
+            StockUpdateEvent(
+                menuItemId = "STEAK-01",
+                updateType = StockUpdateType.ITEM_86ED
+            )
+        )
+        val itemAfter86 = repository.getItemById("STEAK-01")
+        assertEquals(false, itemAfter86?.isAvailable)
+        assertEquals(5, itemAfter86?.stockQuota)
+
+        // 2. A subsequent countdown event without restock must NOT make the item available
+        repository.handleIncomingStockEvent(
+            StockUpdateEvent(
+                menuItemId = "STEAK-01",
+                updateType = StockUpdateType.QUOTA_COUNTDOWN,
+                remainingQuota = 3,
+                isAvailable = true
+            )
+        )
+        val itemAfterCountdown = repository.getItemById("STEAK-01")
+        assertEquals(false, itemAfterCountdown?.isAvailable, "Countdown must not un-86 an item")
+        assertEquals(3, itemAfterCountdown?.stockQuota)
+
+        // 3. Only ITEM_RESTOCKED clears the 86'd status
+        repository.handleIncomingStockEvent(
+            StockUpdateEvent(
+                menuItemId = "STEAK-01",
+                updateType = StockUpdateType.ITEM_RESTOCKED,
+                remainingQuota = 10
+            )
+        )
+        val itemAfterRestock = repository.getItemById("STEAK-01")
+        assertEquals(true, itemAfterRestock?.isAvailable)
+        assertEquals(10, itemAfterRestock?.stockQuota)
+
+        repository.stopSync()
+    }
+
+    @Test
     fun testCartInventoryGuardAggregatesDemandAcrossMultipleCartLines() = runTest {
         val sseClient = SseGalleyStockEventClient()
         val repository = InventoryCatalogRepository(

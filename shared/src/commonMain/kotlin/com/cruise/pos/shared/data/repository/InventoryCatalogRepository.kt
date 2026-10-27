@@ -91,7 +91,8 @@ class InventoryCatalogRepository(
             )
             StockUpdateType.QUOTA_COUNTDOWN -> {
                 val newQuota = event.remainingQuota ?: targetItem.stockQuota
-                val isStillAvailable = (newQuota == null || newQuota > 0) && event.isAvailable
+                // If item is already 86'd/unavailable, a countdown without restock cannot make it available
+                val isStillAvailable = targetItem.isAvailable && (newQuota == null || newQuota > 0) && event.isAvailable
                 targetItem.copy(
                     stockQuota = newQuota,
                     isAvailable = isStillAvailable

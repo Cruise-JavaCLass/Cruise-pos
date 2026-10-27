@@ -191,6 +191,53 @@ class SplitBillingPennyRoundingAndTenderTest {
             repo.buildBatchPayload("ORD-OK-1", breakdowns, emptyMap(), 1000L)
         }
 
+        // Duplicate item assignment throws
+        val duplicateOrder = MultiGuestSplitOrder(
+            orderId = "ORD-ERR-DUP",
+            originalItems = cartItems,
+            guestAssignments = listOf(
+                GuestSplitAssignment(guest = guest1, assignedItemIds = listOf("c1")),
+                GuestSplitAssignment(guest = guest2, assignedItemIds = listOf("c1"))
+            )
+        )
+        kotlin.test.assertFailsWith<IllegalArgumentException> {
+            SplitFolioCalculator.calculateSplitBreakdown(duplicateOrder)
+        }
+
+        // Unassigned item throws
+        val unassignedOrder = MultiGuestSplitOrder(
+            orderId = "ORD-ERR-MISSING",
+            originalItems = listOf(
+                CartItem(id = "c1", menuItem = pizzaItem, quantity = 1),
+                CartItem(id = "c2", menuItem = cocktailItem, quantity = 1)
+            ),
+            guestAssignments = listOf(
+                GuestSplitAssignment(guest = guest1, assignedItemIds = listOf("c1"))
+            )
+        )
+        kotlin.test.assertFailsWith<IllegalArgumentException> {
+            SplitFolioCalculator.calculateSplitBreakdown(unassignedOrder)
+        }
+
+        // Mixed order: 2 guests with assigned items, 1 guest with no items and no tip (omitted)
+        val mixedOrder = MultiGuestSplitOrder(
+            orderId = "ORD-MIXED",
+            originalItems = listOf(
+                CartItem(id = "c1", menuItem = pizzaItem, quantity = 1),
+                CartItem(id = "c2", menuItem = cocktailItem, quantity = 1)
+            ),
+            guestAssignments = listOf(
+                GuestSplitAssignment(guest = guest1, assignedItemIds = listOf("c1"), customTipAmount = 2.0),
+                GuestSplitAssignment(guest = guest2, assignedItemIds = listOf("c2"), customTipAmount = 0.0),
+                GuestSplitAssignment(guest = guest3, assignedItemIds = emptyList(), customTipAmount = 0.0)
+            )
+        )
+        val mixedBreakdowns = SplitFolioCalculator.calculateSplitBreakdown(mixedOrder)
+        assertEquals(2, mixedBreakdowns.size)
+        assertTrue(mixedBreakdowns.any { it.guestId == guest1.guestId })
+        assertTrue(mixedBreakdowns.any { it.guestId == guest2.guestId })
+        assertTrue(mixedBreakdowns.none { it.guestId == guest3.guestId })
+
         // Zero total subtotal with zero tip omits zero-charge guests
         val zeroSubtotalOrder = MultiGuestSplitOrder(
             orderId = "ORD-ZERO",

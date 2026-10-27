@@ -199,7 +199,11 @@ fun SequentialGuestTenderDialog(
                         Spacer(modifier = Modifier.height(6.dp))
 
                         OutlinedButton(
-                            onClick = { onSignCaptured("sig_${currentGuest.guestId}_${currentGuest.folioId}") },
+                            onClick = {
+                                if (com.example.cruise_pos.BuildConfig.DEBUG) {
+                                    onSignCaptured("sig_${currentGuest.guestId}_${currentGuest.folioId}")
+                                }
+                            },
                             enabled = isCardTapped && !isSignatureCaptured,
                             modifier = Modifier
                                 .fillMaxWidth()

@@ -24,6 +24,12 @@ object SplitFolioCalculator {
         require(unknownItemIds.isEmpty()) {
             "Assigned items contain unknown item IDs: $unknownItemIds"
         }
+        require(allAssignedIds.size == allAssignedIds.toSet().size) {
+            "An item is assigned more than once"
+        }
+        require(allAssignedIds.toSet() == originalItemIds) {
+            "Every cart item must be assigned to exactly one guest"
+        }
 
         // Map item subtotals
         val itemSubtotalMap = order.originalItems.associate { it.id to it.itemSubtotal }
@@ -104,8 +110,11 @@ object SplitFolioCalculator {
             )
         }
 
-        // Add 0-subtotal guests if any
-        val zeroAssignments = order.guestAssignments.filter { (guestSubtotals[it.guest.guestId] ?: 0.0) == 0.0 }
+        // Add 0-subtotal guests only if they leave a positive tip
+        val zeroAssignments = order.guestAssignments.filter {
+            (guestSubtotals[it.guest.guestId] ?: 0.0) == 0.0 &&
+                roundToCents(it.customTipAmount) > 0.0
+        }
         for (assignment in zeroAssignments) {
             val tip = roundToCents(assignment.customTipAmount)
             results.add(
