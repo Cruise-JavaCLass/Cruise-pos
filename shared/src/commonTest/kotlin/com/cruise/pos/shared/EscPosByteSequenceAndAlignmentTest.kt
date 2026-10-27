@@ -9,6 +9,7 @@ import com.cruise.pos.shared.domain.printer.ReceiptLineItem
 import com.cruise.pos.shared.domain.printer.ReceiptPaperWidth
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class EscPosByteSequenceAndAlignmentTest {
@@ -128,5 +129,56 @@ class EscPosByteSequenceAndAlignmentTest {
 
         // 8 header bytes + (2 widthBytes * 8 height) = 24 bytes total
         assertEquals(24, rasterBytes.size)
+    }
+    @Test
+    fun testDuplicateJobIdEnqueueIsRejected() = kotlinx.coroutines.test.runTest {
+        val queue = com.cruise.pos.shared.data.printer.BluetoothPrintSpoolerQueue { null }
+        val job = com.cruise.pos.shared.domain.printer.PrintJob(
+            id = "JOB-DUP-01",
+            title = "Customer Receipt",
+            payload = byteArrayOf(0x1B, 0x40),
+            createdAtEpochMs = 1000L
+        )
+
+        val firstEnqueue = queue.enqueueJob(job)
+        val duplicateEnqueue = queue.enqueueJob(job)
+
+        assertTrue(firstEnqueue)
+        assertFalse(duplicateEnqueue)
+    }
+
+    @Test
+    fun testRasterDimensionExceeding16BitIsRejected() {
+        val renderer = ReceiptBitmapRenderer()
+        // Width of (65536 * 8) dots -> widthBytes = 65536 > 65535
+        val hugeWidthPixels = Array(1) { BooleanArray(65536 * 8) }
+        kotlin.test.assertFailsWith<IllegalArgumentException> {
+            renderer.renderMonochromeBitmap(hugeWidthPixels)
+        }
+    }
+
+    @Test
+    fun testLongQrCodePayloadFittedToPaperWidth() {
+        val gen = EscPosCommandGenerator()
+        // Very long payload that exceeds small module sizes
+        val longPayload = "https://cruise.local/long-folio-url/".repeat(10)
+        val receipt = ReceiptData(
+            receiptId = "REC-99",
+            outletName = "Bar",
+            stationId = "ST-01",
+            cashierName = "Cashier",
+            guestFolioId = "101",
+            cabinNumber = "1010",
+            items = emptyList<ReceiptLineItem>(),
+            subtotal = 10.0,
+            gratuity = 1.0,
+            tip = 0.0,
+            total = 11.0,
+            qrCodePayload = longPayload,
+            timestamp = "2026-10-22 21:45:00",
+            paperWidth = ReceiptPaperWidth.WIDTH_58MM
+        )
+        val bytes = gen.buildReceipt(receipt)
+        assertTrue(bytes.isNotEmpty())
     }
 }

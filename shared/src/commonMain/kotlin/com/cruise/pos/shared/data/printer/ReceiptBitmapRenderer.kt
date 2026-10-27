@@ -27,6 +27,9 @@ class ReceiptBitmapRenderer {
 
         // Width in bytes (padded to multiple of 8)
         val widthBytes = (originalWidth + 7) / 8
+        require(widthBytes in 1..65535 && height in 1..65535) {
+            "Raster image dimensions must fit within unsigned 16-bit range (widthBytes=$widthBytes, height=$height)"
+        }
         val effectiveWidthDots = widthBytes * 8
 
         val xL = (widthBytes and 0xFF).toByte()

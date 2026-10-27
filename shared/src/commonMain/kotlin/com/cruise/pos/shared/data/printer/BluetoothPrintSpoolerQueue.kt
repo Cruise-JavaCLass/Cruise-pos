@@ -30,6 +30,12 @@ class BluetoothPrintSpoolerQueue(
     override val failedJobs: StateFlow<List<PrintJob>> = _failedJobs.asStateFlow()
 
     override suspend fun enqueueJob(job: PrintJob): Boolean = mutex.withLock {
+        val isDuplicate = pendingQueue.any { it.id == job.id } ||
+            _activeJob.value?.id == job.id ||
+            _failedJobs.value.any { it.id == job.id }
+        if (isDuplicate) {
+            return false
+        }
         pendingQueue.addLast(job.copy(status = PrintJobStatus.QUEUED))
         _queueSize.value = pendingQueue.size
         return true

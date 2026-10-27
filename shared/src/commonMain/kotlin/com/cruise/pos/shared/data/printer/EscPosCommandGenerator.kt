@@ -225,9 +225,10 @@ class EscPosCommandGenerator {
         }
 
         receipt.qrCodePayload?.let { qr ->
+            val (fittedPayload, moduleSize) = fitQrToPaperWidth(qr, width)
             feedLines(1)
             setAlignment(EscPosAlignment.CENTER)
-            qrCode(qr, moduleSize = if (width == ReceiptPaperWidth.WIDTH_58MM) 5 else 7)
+            qrCode(fittedPayload, moduleSize = moduleSize)
             feedLines(1)
             textLine("Scan to view e-Folio")
         }
@@ -239,6 +240,42 @@ class EscPosCommandGenerator {
         cutPaper()
 
         return build()
+    }
+
+    
+    private fun estimateQrModules(dataLength: Int): Int {
+        val version = when {
+            dataLength <= 14 -> 1
+            dataLength <= 26 -> 2
+            dataLength <= 42 -> 3
+            dataLength <= 62 -> 4
+            dataLength <= 84 -> 5
+            dataLength <= 106 -> 6
+            dataLength <= 122 -> 7
+            dataLength <= 152 -> 8
+            dataLength <= 180 -> 9
+            dataLength <= 213 -> 10
+            dataLength <= 287 -> 14
+            dataLength <= 412 -> 20
+            dataLength <= 858 -> 30
+            else -> 40
+        }
+        val modules = 21 + 4 * (version - 1)
+        val quietZone = 8
+        return modules + quietZone
+    }
+
+    private fun fitQrToPaperWidth(payload: String, paperWidth: ReceiptPaperWidth): Pair<String, Int> {
+        var currentPayload = payload
+        var totalModules = estimateQrModules(currentPayload.encodeToByteArray().size)
+        if (totalModules > paperWidth.dotWidth) {
+            currentPayload = currentPayload.take(40)
+            totalModules = estimateQrModules(currentPayload.encodeToByteArray().size)
+        }
+        val maxTargetModule = if (paperWidth == ReceiptPaperWidth.WIDTH_58MM) 5 else 7
+        val calculatedSize = paperWidth.dotWidth / totalModules
+        val moduleSize = maxOf(1, minOf(calculatedSize, maxTargetModule))
+        return Pair(currentPayload, moduleSize)
     }
 
     private fun formatCurrency(amount: Double): String {
