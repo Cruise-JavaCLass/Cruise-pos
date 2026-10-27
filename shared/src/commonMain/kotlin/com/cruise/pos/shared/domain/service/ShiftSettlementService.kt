@@ -90,8 +90,26 @@ class ShiftSettlementService(
         )
     }
 
-    private fun sanitizeText(input: String, maxLength: Int = 40): String {
-        return input.filter { it in ' '..'~' }.take(maxLength)
+        private fun sanitizeText(input: String, maxLength: Int? = 40): String {
+        val filtered = input.filter { !it.isISOControl() }
+        val result = if (filtered.isNotBlank()) filtered else input
+        return if (maxLength != null) result.take(maxLength) else result
+    }
+
+    private fun appendWrappedField(sb: StringBuilder, label: String, value: String, lineWidth: Int = 42) {
+        val prefix = "$label: "
+        val firstLineAvailable = lineWidth - prefix.length
+        if (value.length <= firstLineAvailable) {
+            sb.append("$prefix$value\n")
+        } else {
+            sb.append("$prefix${value.take(firstLineAvailable)}\n")
+            var remaining = value.substring(firstLineAvailable)
+            while (remaining.isNotEmpty()) {
+                val chunkSize = minOf(lineWidth - 2, remaining.length)
+                sb.append("  ${remaining.take(chunkSize)}\n")
+                remaining = remaining.substring(chunkSize)
+            }
+        }
     }
 
     /**
@@ -106,7 +124,7 @@ class ShiftSettlementService(
         val cashierId = sanitizeText(zReport.cashierId)
         val shiftId = sanitizeText(zReport.shiftId)
         val stationId = sanitizeText(zReport.stationId)
-        val zReportId = sanitizeText(zReport.zReportId)
+        val zReportId = sanitizeText(zReport.zReportId, maxLength = null)
         val witness = zReport.witnessCashierName?.let { sanitizeText(it) }
         val notes = zReport.notes?.let { sanitizeText(it, 100) }
 
@@ -114,12 +132,14 @@ class ShiftSettlementService(
         sb.append("         FINAL SHIFT Z-REPORT\n")
         sb.append("     CRUISE SHIP POS RECONCILIATION\n")
         sb.append(dsep)
-        sb.append("Z-Report ID : $zReportId\n")
+        appendWrappedField(sb, "Z-Report ID ", zReportId)
         sb.append("Shift ID    : $shiftId\n")
         sb.append("Station     : $stationId\n")
         sb.append("Cashier     : $cashierName ($cashierId)\n")
-        if (!witness.isNullOrBlank()) {
-            sb.append("Witness     : $witness\n")
+                val hasWitness = !witness.isNullOrBlank() || !zReport.witnessCashierName.isNullOrBlank()
+        if (hasWitness) {
+            val witnessName = witness?.takeIf { it.isNotBlank() } ?: zReport.witnessCashierName.orEmpty()
+            sb.append("Witness     : $witnessName\n")
         }
         sb.append("Total Orders: ${zReport.totalOrdersCount}\n")
         sb.append(sep)
@@ -154,7 +174,7 @@ class ShiftSettlementService(
         }
         sb.append(dsep)
         sb.append("Cashier Signature: _______________________\n\n")
-        if (!witness.isNullOrBlank()) {
+                if (hasWitness) {
             sb.append("Witness Signature: _______________________\n\n")
         }
         sb.append("Manager Signature: _______________________\n")

@@ -159,4 +159,43 @@ class ShiftSettlementAndReconciliationTest {
         assertEquals(140.0, xReport.cashSales)
         assertEquals(240.0, xReport.expectedCashInDrawer)
     }
+    @Test
+    fun testLongZReportIdPreservedAndNonAsciiWitnessRendered() {
+        // Shift with long 36-character UUID shiftId
+        val longShiftId = "550e8400-e29b-41d4-a716-446655440000"
+        val xReport = service.generateXReport(
+            shiftId = longShiftId,
+            stationId = "STATION-POOL-01",
+            cashierId = "USR-99",
+            cashierName = "Cashier Name",
+            openedAtMillis = 1774268000000L,
+            startingCashFloat = 200.0,
+            totalCashDrops = 0.0,
+            paymentBreakdowns = emptyList()
+        )
+
+        // Non-ASCII witness name
+        val nonAsciiWitness = "\u674E\u534E"
+        val zReport = service.generateFinalZReport(
+            xReport = xReport,
+            blindDrop = BlindDropDeclaration(
+                countedCashAmount = 200.0,
+                witnessCashierName = nonAsciiWitness,
+                notes = "Closing shift"
+            ),
+            closedAtMillis = 1774271600000L
+        )
+
+        val receiptText = service.renderSettlementReceiptText(zReport)
+
+        // Verify full zReportId is present without truncation
+        val expectedFullId = "Z-$longShiftId-1774271600000"
+        assertTrue(zReport.zReportId == expectedFullId)
+        assertTrue(receiptText.contains(expectedFullId.take(28)))
+        assertTrue(receiptText.contains(expectedFullId.substring(28)))
+
+        // Verify non-ASCII witness is preserved and signature line exists
+        assertTrue(receiptText.contains("Witness     : \u674E\u534E"))
+        assertTrue(receiptText.contains("Witness Signature: _______________________"))
+    }
 }
