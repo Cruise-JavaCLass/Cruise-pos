@@ -31,7 +31,10 @@ class UnifiedHardwareScannerEngine(
     initialConfig: HardwareScannerConfig = HardwareScannerConfig(),
     private val feedbackController: HardwareFeedbackController = MockHardwareFeedbackController(),
     private val currentTimeMillisProvider: () -> Long = { System.currentTimeMillis() },
-    private val monotonicTimeMillisProvider: () -> Long = { kotlin.time.TimeSource.Monotonic.markNow().elapsedNow().inWholeMilliseconds }
+    private val monotonicTimeMillisProvider: () -> Long =
+        kotlin.time.TimeSource.Monotonic.markNow().let { origin ->
+            { origin.elapsedNow().inWholeMilliseconds }
+        }
 ) : UnifiedBarcodeScanner {
 
     private val _config = MutableStateFlow(initialConfig)

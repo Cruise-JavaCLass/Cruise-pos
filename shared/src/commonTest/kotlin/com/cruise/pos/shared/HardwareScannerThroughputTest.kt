@@ -207,4 +207,44 @@ class HardwareScannerThroughputTest {
         assertTrue(p2)
         assertEquals(initialBeepCount + 1, timedFeedback.beepCount)
     }
+    @Test
+    fun testDefaultMonotonicProviderAllowsRescanAfterCooldown() {
+        val feedback = MockHardwareFeedbackController()
+        val defaultEngine = UnifiedHardwareScannerEngine(
+            initialConfig = HardwareScannerConfig(
+                enabledDeviceType = ScannerDeviceType.SUNMI_BUILTIN_LASER,
+                duplicateScanCooldownMillis = 20L
+            ),
+            feedbackController = feedback
+        )
+
+        val firstScan = defaultEngine.processRawBroadcastIntent(
+            action = UnifiedHardwareScannerEngine.SUNMI_ACTION_SCAN,
+            extrasMap = mapOf("data" to "BARCODE-DEFAULT-TEST")
+        )
+        assertTrue(firstScan)
+        assertEquals(1, feedback.beepCount)
+
+        // Immediate duplicate scan within cooldown must be dropped (no beep)
+        val immediateDup = defaultEngine.processRawBroadcastIntent(
+            action = UnifiedHardwareScannerEngine.SUNMI_ACTION_SCAN,
+            extrasMap = mapOf("data" to "BARCODE-DEFAULT-TEST")
+        )
+        assertTrue(immediateDup)
+        assertEquals(1, feedback.beepCount)
+
+        // Wait until real monotonic time has passed 20ms cooldown
+        val start = kotlin.time.TimeSource.Monotonic.markNow()
+        while (start.elapsedNow().inWholeMilliseconds < 35L) {
+            // spin until real monotonic time elapses
+        }
+
+        // Scan of same barcode after cooldown must succeed (triggers 2nd beep)
+        val afterCooldown = defaultEngine.processRawBroadcastIntent(
+            action = UnifiedHardwareScannerEngine.SUNMI_ACTION_SCAN,
+            extrasMap = mapOf("data" to "BARCODE-DEFAULT-TEST")
+        )
+        assertTrue(afterCooldown)
+        assertEquals(2, feedback.beepCount)
+    }
 }
