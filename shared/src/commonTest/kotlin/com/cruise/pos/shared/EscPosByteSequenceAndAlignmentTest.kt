@@ -180,5 +180,59 @@ class EscPosByteSequenceAndAlignmentTest {
         )
         val bytes = gen.buildReceipt(receipt)
         assertTrue(bytes.isNotEmpty())
+
+        val emitted = bytes.toList()
+        val moduleCommand = byteArrayOf(
+            EscPosCommandGenerator.GS, 0x28, 0x6B, 0x03, 0x00, 0x31, 0x43
+        ).toList()
+        val moduleIndex = emitted.windowed(moduleCommand.size)
+            .indexOfFirst { it == moduleCommand }
+        assertTrue(moduleIndex >= 0)
+        assertEquals(3.toByte(), bytes[moduleIndex + moduleCommand.size])
+
+        val payloadBytes = longPayload.encodeToByteArray()
+        val storeCommand = byteArrayOf(
+            EscPosCommandGenerator.GS,
+            0x28,
+            0x6B,
+            ((payloadBytes.size + 3) and 0xFF).toByte(),
+            ((payloadBytes.size + 3) shr 8).toByte(),
+            0x31,
+            0x50,
+            0x30
+        ).toList()
+        val storeIndex = emitted.windowed(storeCommand.size)
+            .indexOfFirst { it == storeCommand }
+        assertTrue(storeIndex >= 0)
+        val payloadStart = storeIndex + storeCommand.size
+        assertEquals(
+            payloadBytes.toList(),
+            bytes.copyOfRange(payloadStart, payloadStart + payloadBytes.size).toList()
+        )
+    }
+
+    @Test
+    fun testQrCodePayloadExceedingMaxCapacityThrows() {
+        val gen = EscPosCommandGenerator()
+        val oversizedPayload = "A".repeat(EscPosCommandGenerator.MAX_QR_BYTE_CAPACITY_M + 1)
+        val receipt = ReceiptData(
+            receiptId = "REC-100",
+            outletName = "Bar",
+            stationId = "ST-01",
+            cashierName = "Cashier",
+            guestFolioId = "101",
+            cabinNumber = "1010",
+            items = emptyList<ReceiptLineItem>(),
+            subtotal = 10.0,
+            gratuity = 1.0,
+            tip = 0.0,
+            total = 11.0,
+            qrCodePayload = oversizedPayload,
+            timestamp = "2026-10-22 21:45:00",
+            paperWidth = ReceiptPaperWidth.WIDTH_58MM
+        )
+        kotlin.test.assertFailsWith<IllegalArgumentException> {
+            gen.buildReceipt(receipt)
+        }
     }
 }

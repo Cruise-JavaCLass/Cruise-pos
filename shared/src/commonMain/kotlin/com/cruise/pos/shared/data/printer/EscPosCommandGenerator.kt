@@ -31,6 +31,7 @@ class EscPosCommandGenerator {
         val CMD_SIZE_DOUBLE: ByteArray = byteArrayOf(GS, 0x21, 0x11)
 
         val CMD_FEED_AND_CUT: ByteArray = byteArrayOf(GS, 0x56, 0x42, 0x00)
+        const val MAX_QR_BYTE_CAPACITY_M: Int = 2331
     }
 
     private val buffer = mutableListOf<Byte>()
@@ -266,16 +267,15 @@ class EscPosCommandGenerator {
     }
 
     private fun fitQrToPaperWidth(payload: String, paperWidth: ReceiptPaperWidth): Pair<String, Int> {
-        var currentPayload = payload
-        var totalModules = estimateQrModules(currentPayload.encodeToByteArray().size)
-        if (totalModules > paperWidth.dotWidth) {
-            currentPayload = currentPayload.take(40)
-            totalModules = estimateQrModules(currentPayload.encodeToByteArray().size)
+        val payloadBytes = payload.encodeToByteArray()
+        require(payloadBytes.size <= MAX_QR_BYTE_CAPACITY_M) {
+            "QR payload size (${payloadBytes.size} bytes) exceeds maximum supported capacity of $MAX_QR_BYTE_CAPACITY_M bytes at Error Correction Level M"
         }
+        val totalModules = estimateQrModules(payloadBytes.size)
         val maxTargetModule = if (paperWidth == ReceiptPaperWidth.WIDTH_58MM) 5 else 7
         val calculatedSize = paperWidth.dotWidth / totalModules
         val moduleSize = maxOf(1, minOf(calculatedSize, maxTargetModule))
-        return Pair(currentPayload, moduleSize)
+        return Pair(payload, moduleSize)
     }
 
     private fun formatCurrency(amount: Double): String {
