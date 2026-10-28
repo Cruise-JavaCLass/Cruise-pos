@@ -55,7 +55,7 @@ class CartInventoryGuardAggregationTest {
             categoryId = "CAT-FOOD",
             basePrice = 20.0,
             isAvailable = true,
-            stockQuota = 4
+            stockQuota = 5
         )
         val repository = InventoryCatalogRepository(
             eventClient = SseGalleyStockEventClient(),
@@ -79,6 +79,7 @@ class CartInventoryGuardAggregationTest {
         assertIs<CartInventoryValidationResult.DepletedItemsDetected>(validation)
         assertEquals(1, validation.invalidItems.size)
         assertEquals(5, validation.invalidItems.first().requestedQuantity)
+        assertEquals("Item has been 86'd (Sold Out) by the kitchen", validation.invalidItems.first().reason)
         repository.stopSync()
     }
 }
