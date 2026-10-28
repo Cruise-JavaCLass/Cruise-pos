@@ -342,7 +342,7 @@ class MaritimeFiscalDutyFreeAndAuditReconciliationTest {
             guestFolioId = "FOLIO-1",
             cabinNumber = "101",
             timestampEpochMs = 1500L,
-            totalAmount = 0.125, // rounds to 0.13 or 0.12
+            totalAmount = 0.125, // rounds to 0.12
             taxAmount = 0.012,
             tenderType = "CASH",
             signatureHashSha256 = "sig1",
@@ -374,5 +374,9 @@ class MaritimeFiscalDutyFreeAndAuditReconciliationTest {
         // Ensure sum of receiptEntries matches grossTotalSales exactly
         val entrySum = ledger.receiptEntries.sumOf { it.totalAmount }
         assertEquals(ledger.grossTotalSales, entrySum)
+        assertEquals(0.12, ledger.receiptEntries[0].totalAmount)
+        assertEquals(0.12, ledger.receiptEntries[1].totalAmount)
+        assertEquals(0.24, ledger.grossTotalSales)
+        assertEquals(0.02, ledger.totalTaxCollected)
     }
 }
