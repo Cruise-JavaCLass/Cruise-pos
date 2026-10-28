@@ -68,9 +68,21 @@ class TransactionSyncEngine(
 
         val response = remoteApi.dispatchBatch(request)
 
-        if (response is SyncBatchResponse.Success) {
-            for (id in response.syncedIds) {
-                transactionDao.updateSyncStatus(id, TransactionSyncStatus.SYNCED, currentTimestampEpochMs)
+        when (response) {
+            is SyncBatchResponse.Success -> {
+                for (id in response.syncedIds) {
+                    transactionDao.updateSyncStatus(id, TransactionSyncStatus.SYNCED, currentTimestampEpochMs)
+                }
+            }
+            is SyncBatchResponse.TransientError -> {
+                for (tx in batchToSync) {
+                    transactionDao.markFailedAndIncrementRetry(tx.id, response.message)
+                }
+            }
+            is SyncBatchResponse.PermanentError -> {
+                for (tx in batchToSync) {
+                    transactionDao.markFailedAndIncrementRetry(tx.id, response.message)
+                }
             }
         }
 

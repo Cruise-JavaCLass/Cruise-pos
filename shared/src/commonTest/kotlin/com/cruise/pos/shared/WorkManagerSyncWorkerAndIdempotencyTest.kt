@@ -141,4 +141,41 @@ class WorkManagerSyncWorkerAndIdempotencyTest {
         val updated = dao.getTransactionById("TX-FAILED-01")
         assertEquals(TransactionSyncStatus.SYNCED, updated?.syncStatus)
     }
+
+    @Test
+    fun testBatchDispatchTransientErrorIncrementsRetryCountAndMarksFailed() = runTest {
+        val dao = InMemoryTransactionDao()
+        val mockApi = MockRemoteSyncApi().apply { shouldSucceed = false }
+        val engine = TransactionSyncEngine(dao, mockApi, chunkSize = 5, maxRetries = 3)
+
+        val seq = dao.getNextMonotonicSequence()
+        val tx = TransactionEntity(
+            id = "TX-RETRY-01",
+            sequenceNumber = seq,
+            outletId = "OUT-01",
+            stationId = "ST-01",
+            cashierId = "USR-01",
+            guestFolioId = "FOLIO-10",
+            cabinNumber = "1001",
+            subtotal = 30.0,
+            taxAmount = 3.0,
+            gratuityAmount = 5.0,
+            tipAmount = 0.0,
+            totalAmount = 38.0,
+            signatureSvg = "sig_retry",
+            syncStatus = TransactionSyncStatus.PENDING,
+            retryCount = 0,
+            lastError = null,
+            createdAtEpochMs = 1774268000000L
+        )
+        dao.insertTransaction(tx)
+
+        val response = engine.syncPendingTransactions(isNetworkAvailable = true)
+        assertIs<SyncBatchResponse.TransientError>(response)
+
+        val updated = dao.getTransactionById("TX-RETRY-01")
+        assertEquals(TransactionSyncStatus.FAILED, updated?.syncStatus)
+        assertEquals(1, updated?.retryCount)
+        assertEquals("Satellite network timeout", updated?.lastError)
+    }
 }
