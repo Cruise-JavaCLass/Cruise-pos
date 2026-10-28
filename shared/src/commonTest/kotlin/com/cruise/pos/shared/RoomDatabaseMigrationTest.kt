@@ -85,4 +85,16 @@ class RoomDatabaseMigrationTest {
             migrationManager.executeMigrations(currentVersion = 2, targetVersion = 1, transactions = emptyList())
         }
     }
+    @Test
+    fun testInvalidMigrationEndVersionThrowsIllegalStateException() {
+        val badMigration = object : com.cruise.pos.shared.data.local.migration.DatabaseMigration {
+            override val startVersion: Int = 1
+            override val endVersion: Int = 1 // Not strictly greater than startVersion!
+            override fun migrateTransactions(transactions: List<TransactionEntity>): List<TransactionEntity> = transactions
+        }
+        val manager = DatabaseMigrationManager(listOf(badMigration))
+        assertFailsWith<IllegalStateException> {
+            manager.executeMigrations(currentVersion = 1, targetVersion = 2, transactions = emptyList())
+        }
+    }
 }
