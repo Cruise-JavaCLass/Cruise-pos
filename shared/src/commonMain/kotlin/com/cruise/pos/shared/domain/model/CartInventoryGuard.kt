@@ -24,9 +24,13 @@ class CartInventoryGuard(
     /**
      * Intercepts items in cart right before tender / checkout.
      * Prevents stale cart submissions where items have been marked 86'd or depleted in real-time.
+     * Aggregates quantities across duplicate cart lines for the same menu item.
      */
     suspend fun validateCartBeforeTender(items: List<CartItem>): CartInventoryValidationResult {
         val issues = mutableListOf<CartItemValidationIssue>()
+        val totalQuantityByMenuItemId = items.groupBy { it.menuItem.id }
+            .mapValues { (_, itemList) -> itemList.sumOf { it.quantity } }
+        val handledMenuItemIds = mutableSetOf<String>()
 
         val aggregatedQuantities = items.groupBy { it.menuItem.id }
             .mapValues { (_, cartItems) -> cartItems.sumOf { it.quantity } }
@@ -40,12 +44,17 @@ class CartInventoryGuard(
 
             val totalRequested = aggregatedQuantities[item.menuItem.id] ?: item.quantity
             val freshItem = inventoryRepository.getItemById(item.menuItem.id)
+            val menuItemId = item.menuItem.id
+            if (!handledMenuItemIds.add(menuItemId)) continue
+
+            val totalRequested = totalQuantityByMenuItemId[menuItemId] ?: item.quantity
+            val freshItem = inventoryRepository.getItemById(menuItemId)
 
             if (freshItem == null || freshItem.is86ed) {
                 issues.add(
                     CartItemValidationIssue(
                         cartItemId = item.id,
-                        menuItemId = item.menuItem.id,
+                        menuItemId = menuItemId,
                         menuItemName = item.menuItem.name,
                         requestedQuantity = totalRequested,
                         remainingStock = freshItem?.stockQuota ?: 0,
@@ -56,7 +65,7 @@ class CartInventoryGuard(
                 issues.add(
                     CartItemValidationIssue(
                         cartItemId = item.id,
-                        menuItemId = item.menuItem.id,
+                        menuItemId = menuItemId,
                         menuItemName = item.menuItem.name,
                         requestedQuantity = totalRequested,
                         remainingStock = freshItem.stockQuota,

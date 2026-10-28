@@ -44,7 +44,7 @@ class Realtime86AndConcurrencyTest {
         val repository = InventoryCatalogRepository(
             eventClient = sseClient,
             initialItems = listOf(specialSteak, houseWine),
-            scope = this
+            scope = backgroundScope
         )
 
         // Initial state
@@ -79,7 +79,7 @@ class Realtime86AndConcurrencyTest {
         val repository = InventoryCatalogRepository(
             eventClient = sseClient,
             initialItems = listOf(specialSteak),
-            scope = this
+            scope = backgroundScope
         )
         val guard = CartInventoryGuard(repository)
 
@@ -113,12 +113,118 @@ class Realtime86AndConcurrencyTest {
     }
 
     @Test
+    fun testQuotaDepletedItemRestoredByCountdownEvent() = runTest {
+        val sseClient = SseGalleyStockEventClient()
+        val repository = InventoryCatalogRepository(
+            eventClient = sseClient,
+            initialItems = listOf(specialSteak.copy(stockQuota = 1, isAvailable = true)),
+            scope = backgroundScope
+        )
+
+        // 1. Claim the only unit, depleting quota to 0 and setting isAvailable = false
+        val decremented = repository.tryDecrementQuota("STEAK-01", 1)
+        assertTrue(decremented)
+        val itemAfterDepletion = repository.getItemById("STEAK-01")
+        assertEquals(false, itemAfterDepletion?.isAvailable)
+        assertEquals(0, itemAfterDepletion?.stockQuota)
+
+        // 2. Countdown event with positive quota restores availability because it was not explicitly 86'd
+        repository.handleIncomingStockEvent(
+            StockUpdateEvent(
+                menuItemId = "STEAK-01",
+                updateType = StockUpdateType.QUOTA_COUNTDOWN,
+                remainingQuota = 5,
+                isAvailable = true
+            )
+        )
+        val itemAfterRestoration = repository.getItemById("STEAK-01")
+        assertEquals(true, itemAfterRestoration?.isAvailable, "Positive countdown must restore quota-depleted item")
+        assertEquals(5, itemAfterRestoration?.stockQuota)
+
+        repository.stopSync()
+    }
+
+    @Test
+    fun test86edItemRemainsUnavailableAfterCountdownUntilRestocked() = runTest {
+        val sseClient = SseGalleyStockEventClient()
+        val repository = InventoryCatalogRepository(
+            eventClient = sseClient,
+            initialItems = listOf(specialSteak.copy(stockQuota = 5, isAvailable = true)),
+            scope = backgroundScope
+        )
+
+        // 1. Kitchen 86s the item
+        repository.handleIncomingStockEvent(
+            StockUpdateEvent(
+                menuItemId = "STEAK-01",
+                updateType = StockUpdateType.ITEM_86ED
+            )
+        )
+        val itemAfter86 = repository.getItemById("STEAK-01")
+        assertEquals(false, itemAfter86?.isAvailable)
+        assertEquals(5, itemAfter86?.stockQuota)
+
+        // 2. A subsequent countdown event without restock must NOT make the item available
+        repository.handleIncomingStockEvent(
+            StockUpdateEvent(
+                menuItemId = "STEAK-01",
+                updateType = StockUpdateType.QUOTA_COUNTDOWN,
+                remainingQuota = 3,
+                isAvailable = true
+            )
+        )
+        val itemAfterCountdown = repository.getItemById("STEAK-01")
+        assertEquals(false, itemAfterCountdown?.isAvailable, "Countdown must not un-86 an item")
+        assertEquals(3, itemAfterCountdown?.stockQuota)
+
+        // 3. Only ITEM_RESTOCKED clears the 86'd status
+        repository.handleIncomingStockEvent(
+            StockUpdateEvent(
+                menuItemId = "STEAK-01",
+                updateType = StockUpdateType.ITEM_RESTOCKED,
+                remainingQuota = 10
+            )
+        )
+        val itemAfterRestock = repository.getItemById("STEAK-01")
+        assertEquals(true, itemAfterRestock?.isAvailable)
+        assertEquals(10, itemAfterRestock?.stockQuota)
+
+        repository.stopSync()
+    }
+
+    @Test
+    fun testCartInventoryGuardAggregatesDemandAcrossMultipleCartLines() = runTest {
+        val sseClient = SseGalleyStockEventClient()
+        val repository = InventoryCatalogRepository(
+            eventClient = sseClient,
+            initialItems = listOf(specialSteak.copy(stockQuota = 5)),
+            scope = backgroundScope
+        )
+        val guard = CartInventoryGuard(repository)
+
+        val cart = listOf(
+            CartItem(id = "c1", menuItem = specialSteak, quantity = 3),
+            CartItem(id = "c2", menuItem = specialSteak, quantity = 3)
+        )
+
+        val result = guard.validateCartBeforeTender(cart)
+        assertIs<CartInventoryValidationResult.DepletedItemsDetected>(result)
+        val issues = (result as CartInventoryValidationResult.DepletedItemsDetected).invalidItems
+        assertEquals(1, issues.size)
+        assertEquals("STEAK-01", issues.first().menuItemId)
+        assertEquals(6, issues.first().requestedQuantity)
+        assertEquals(5, issues.first().remainingStock)
+
+        repository.stopSync()
+    }
+
+    @Test
     fun testConcurrentStockDecrementPreventsOverAllocation() = runTest {
         val sseClient = SseGalleyStockEventClient()
         val repository = InventoryCatalogRepository(
             eventClient = sseClient,
             initialItems = listOf(specialSteak.copy(stockQuota = 5)),
-            scope = this
+            scope = backgroundScope
         )
 
         // 10 concurrent requests trying to claim 1 unit each when only 5 units exist
