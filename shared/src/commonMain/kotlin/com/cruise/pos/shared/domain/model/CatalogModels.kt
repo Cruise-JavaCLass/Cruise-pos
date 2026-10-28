@@ -29,7 +29,8 @@ data class MenuItem(
     val imageUrl: String? = null,
     val isAvailable: Boolean = true, // If false, item is 86'd / out-of-stock
     val stockQuota: Int? = null,     // Null if unlimited, non-null for countdown tracking
-    val modifierGroups: List<ModifierGroup> = emptyList()
+    val modifierGroups: List<ModifierGroup> = emptyList(),
+    val isAlcoholic: Boolean? = null // Catalog-owned authoritative alcohol classification
 ) {
     val is86ed: Boolean get() = !isAvailable || (stockQuota != null && stockQuota <= 0)
     val isLowStock: Boolean get() = !is86ed && stockQuota != null && stockQuota in 1..5
