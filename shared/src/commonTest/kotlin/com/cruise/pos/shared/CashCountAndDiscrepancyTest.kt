@@ -61,4 +61,13 @@ class CashCountAndDiscrepancyTest {
         assertFalse(CashCalculationUtils.isValidStartingFloat(-1.0))
         assertFalse(CashCalculationUtils.isValidStartingFloat(10000.01))
     }
+
+    @Test
+    fun testValidCashDrop() {
+        assertTrue(CashCalculationUtils.isValidCashDrop(50.0, 100.0))
+        assertTrue(CashCalculationUtils.isValidCashDrop(100.0, 100.0))
+        assertFalse(CashCalculationUtils.isValidCashDrop(0.0, 100.0))
+        assertFalse(CashCalculationUtils.isValidCashDrop(-10.0, 100.0))
+        assertFalse(CashCalculationUtils.isValidCashDrop(150.0, 100.0))
+    }
 }
