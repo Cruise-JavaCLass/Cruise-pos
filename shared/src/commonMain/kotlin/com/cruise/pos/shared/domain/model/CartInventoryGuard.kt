@@ -24,6 +24,7 @@ class CartInventoryGuard(
     /**
      * Intercepts items in cart right before tender / checkout.
      * Prevents stale cart submissions where items have been marked 86'd or depleted in real-time.
+     * Aggregates quantities across duplicate cart lines for the same menu item.
      */
     suspend fun validateCartBeforeTender(items: List<CartItem>): CartInventoryValidationResult {
         val issues = mutableListOf<CartItemValidationIssue>()
@@ -32,32 +33,34 @@ class CartInventoryGuard(
         val handledMenuItemIds = mutableSetOf<String>()
 
         for (item in items) {
-            val freshItem = inventoryRepository.getItemById(item.menuItem.id)
+            val menuItemId = item.menuItem.id
+            if (!handledMenuItemIds.add(menuItemId)) continue
+
+            val totalRequested = totalQuantityByMenuItemId[menuItemId] ?: item.quantity
+            val freshItem = inventoryRepository.getItemById(menuItemId)
+
             if (freshItem == null || freshItem.is86ed) {
                 issues.add(
                     CartItemValidationIssue(
                         cartItemId = item.id,
-                        menuItemId = item.menuItem.id,
+                        menuItemId = menuItemId,
                         menuItemName = item.menuItem.name,
-                        requestedQuantity = item.quantity,
+                        requestedQuantity = totalRequested,
                         remainingStock = freshItem?.stockQuota ?: 0,
                         reason = "Item has been 86'd (Sold Out) by the kitchen"
                     )
                 )
-            } else {
-                val totalRequested = totalQuantityByMenuItemId[item.menuItem.id] ?: item.quantity
-                if (freshItem.stockQuota != null && freshItem.stockQuota < totalRequested && handledMenuItemIds.add(item.menuItem.id)) {
-                    issues.add(
-                        CartItemValidationIssue(
-                            cartItemId = item.id,
-                            menuItemId = item.menuItem.id,
-                            menuItemName = item.menuItem.name,
-                            requestedQuantity = totalRequested,
-                            remainingStock = freshItem.stockQuota,
-                            reason = "Requested $totalRequested units, but only ${freshItem.stockQuota} remain in stock"
-                        )
+            } else if (freshItem.stockQuota != null && freshItem.stockQuota < totalRequested) {
+                issues.add(
+                    CartItemValidationIssue(
+                        cartItemId = item.id,
+                        menuItemId = menuItemId,
+                        menuItemName = item.menuItem.name,
+                        requestedQuantity = totalRequested,
+                        remainingStock = freshItem.stockQuota,
+                        reason = "Requested $totalRequested units, but only ${freshItem.stockQuota} remain in stock"
                     )
-                }
+                )
             }
         }
 
