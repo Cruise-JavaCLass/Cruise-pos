@@ -46,6 +46,8 @@ class ShiftLifecycleTransitionTest {
         val shift = (openResult as ApiResult.Success).data
         assertEquals(ShiftStatus.OPEN, shift.status)
         assertEquals(200.0, shift.startingFloat)
+        assertNotNull(shift.openedAt)
+        assertTrue(shift.openedAt != "2026-10-22T08:00:00Z")
         assertEquals(shift, repo.currentShift.value)
 
         // 4. Query Active Shift
@@ -66,6 +68,8 @@ class ShiftLifecycleTransitionTest {
         assertEquals(ShiftStatus.CLOSED, closedShift.status)
         assertEquals(550.0, closedShift.actualCountedCash)
         assertEquals(0.0, closedShift.cashDifference) // 200 + 350 expected = 550
+        assertNotNull(closedShift.closedAt)
+        assertTrue(closedShift.closedAt != "2026-10-22T17:00:00Z")
         assertNull(repo.currentShift.value)
     }
 }
