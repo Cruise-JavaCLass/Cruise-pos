@@ -70,7 +70,7 @@ class ShiftRepositoryImpl(
             status = ShiftStatus.OPEN,
             startingFloat = request.startingFloat,
             startingDenominations = request.denominations,
-            openedAt = "2026-10-22T08:00:00Z"
+            openedAt = clock.now().toString()
         )
         _currentShift.value = newShift
         return ApiResult.Success(newShift)
@@ -108,8 +108,8 @@ class ShiftRepositoryImpl(
             stationId = existing?.stationId ?: "STATION_1",
             status = ShiftStatus.CLOSED,
             startingFloat = existing?.startingFloat ?: 0.0,
-            openedAt = existing?.openedAt ?: "2026-10-22T08:00:00Z",
-            closedAt = "2026-10-22T17:00:00Z",
+            openedAt = existing?.openedAt ?: clock.now().toString(),
+            closedAt = clock.now().toString(),
             totalCashDrops = existing?.totalCashDrops ?: 0.0,
             cashDropHistory = existing?.cashDropHistory ?: emptyList(),
             expectedCash = expected,
